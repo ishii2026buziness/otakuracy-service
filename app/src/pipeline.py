@@ -12,7 +12,7 @@ def run_pipeline(run_id: str, artifacts: ArtifactStore) -> JobResult:
     stages.append(stage)
 
     return JobResult(
-        pipeline="service-name",
+        pipeline="otakuracy",
         run_id=run_id,
         success=True,
         stages=stages,

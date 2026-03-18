@@ -1,0 +1,4 @@
+service_name: otakuracy
+infra:
+  url: https://github.com/ishii2025buziness/k12-network-notes  # デフォルト。変える場合はここを書き換える
+  type: k12
