@@ -2,9 +2,12 @@
 
 import re
 import sys
+from datetime import datetime, timezone
 
 import requests
 from bs4 import BeautifulSoup
+
+from .base import EventSource, RawEventRecord
 
 BASE_URL = "https://eplus.jp"
 ANIME_TOKYO_URL = f"{BASE_URL}/sf/event/anime/tokyo"
@@ -14,7 +17,11 @@ USER_AGENT = (
 )
 
 
-class EplusClient:
+class EplusClient(EventSource):
+    SOURCE_ID = "eplus"
+    TIER = 1
+    COLLECTION_METHOD = "requests"
+
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": USER_AGENT})
@@ -137,3 +144,28 @@ class EplusClient:
                     "url": ev["url"],
                 }
         return list(seen.values())
+
+    def collect_raw(self, max_pages: int = 5) -> list[RawEventRecord]:
+        """Fetch raw events from e+ and return as RawEventRecord list."""
+        events = self.collect_events(max_pages)
+        records = []
+        for ev in events:
+            records.append(
+                RawEventRecord(
+                    source_id="eplus",
+                    source_url=ev["url"],
+                    fetched_at=datetime.now(timezone.utc),
+                    raw_title=ev["title"],
+                    raw_date_text=" / ".join(ev["dates"]) if ev.get("dates") else None,
+                    raw_venue_text=f"{ev.get('venue', '')} ({ev.get('prefecture', '')})" if ev.get("venue") else None,
+                    raw_price_text=None,
+                    raw_body=ev.get("time"),
+                    structured_fields={
+                        "accept_type": ev.get("accept_type", ""),
+                        "status": ev.get("status", ""),
+                        "prefecture": ev.get("prefecture", ""),
+                        "dates": ev.get("dates", []),
+                    },
+                )
+            )
+        return records

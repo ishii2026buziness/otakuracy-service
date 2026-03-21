@@ -2,11 +2,13 @@
 
 import re
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 import requests
 from bs4 import BeautifulSoup
+
+from .base import EventSource, RawEventRecord
 
 BASE_URL = "https://www.eventernote.com"
 USER_AGENT = (
@@ -15,7 +17,11 @@ USER_AGENT = (
 )
 
 
-class EventernoteClient:
+class EventernoteClient(EventSource):
+    SOURCE_ID = "eventernote"
+    TIER = 1
+    COLLECTION_METHOD = "requests"
+
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": USER_AGENT})
@@ -163,3 +169,35 @@ class EventernoteClient:
                 if ev:
                     events.append(ev)
         return events
+
+    def collect_raw(self, pages: int = 10) -> list[RawEventRecord]:
+        """Fetch raw events from Eventernote and return as RawEventRecord list."""
+        today = date.today()
+        date_str = f"{today.year}-{today.month}-{today.day}"
+        records = []
+        for page in range(1, pages + 1):
+            items = self.fetch_event_list_page(date_str, page)
+            if not items:
+                break
+            for li in items:
+                ev = self._parse_event_from_li(li, actor_id="")
+                if not ev:
+                    continue
+                records.append(
+                    RawEventRecord(
+                        source_id="eventernote",
+                        source_url=ev["url"],
+                        fetched_at=datetime.now(timezone.utc),
+                        raw_title=ev["title"],
+                        raw_date_text=ev.get("date"),
+                        raw_venue_text=ev.get("venue"),
+                        raw_price_text=None,
+                        raw_body=ev.get("time"),
+                        structured_fields={
+                            "eventernote_id": ev.get("id", ""),
+                            "venue_url": ev.get("venue_url", ""),
+                            "actor_ids": [],
+                        },
+                    )
+                )
+        return records
