@@ -27,11 +27,20 @@ def normalize_venue(venue: str) -> str:
 def _same_event(a: RawEventRecord, a_ip: str | None,
                 b: RawEventRecord, b_ip: str | None) -> bool:
     """
-    同一イベント判定:
+    同一イベント判定。IP が特定できていることが前提。
+
     1. date + venue + ip が全て一致 → 確実に同一
-    2. date + ip が一致 + title類似(≥0.6) → 高確率同一
-    3. date + venue が一致（ip不明の場合のフォールバック）
+    2. date + ip が一致 + title類似(≥0.6) → 高確率同一（会場表記が異なるソース間対応）
+
+    IP が不明（None）な場合は同一と判定しない。
+    IP が特定できていないイベントは dedup の根拠がないため除外する。
     """
+    # IP不明は判定不能
+    if not a_ip or not b_ip:
+        return False
+    if a_ip != b_ip:
+        return False
+
     date_a = (a.raw_date_text or "")[:10]
     date_b = (b.raw_date_text or "")[:10]
     if not date_a or not date_b or date_a != date_b:
@@ -40,14 +49,11 @@ def _same_event(a: RawEventRecord, a_ip: str | None,
     venue_a = normalize_venue(a.raw_venue_text or "")
     venue_b = normalize_venue(b.raw_venue_text or "")
     venue_match = bool(venue_a and venue_b and venue_a == venue_b)
-    ip_match = bool(a_ip and b_ip and a_ip == b_ip)
 
-    if venue_match and ip_match:
+    if venue_match:
         return True
-    if venue_match and not a_ip and not b_ip:
-        return True  # ip不明だが日付+会場が一致
-    if ip_match and title_similarity(a.raw_title, b.raw_title) >= 0.6:
-        return True
+    if title_similarity(a.raw_title, b.raw_title) >= 0.6:
+        return True  # 会場表記がソース間で違うケースのフォールバック
     return False
 
 
