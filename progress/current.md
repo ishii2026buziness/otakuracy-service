@@ -56,6 +56,19 @@ ssh k12 "cd ~/k12-network-notes && sudo nixos-rebuild switch --flake .#k12"
 ssh k12 "sudo systemctl start otakuracy && journalctl -u otakuracy -f"
 ```
 
+**KEN-89〜92: IP名寄せ改善**（設計フェーズ、KEN-80と並行可）
+
+現状のIP名寄せ検証結果（2026-03-21実施）:
+- e+ 100件 + Eventernote 90件 = 190件スクレイピング
+- 文字列マッチ: 7件 (3.7%)、Gateway(Haiku)込み: 61件 (32.1%)
+- 問題: Haikuが自由記述でIP名を返すため表記ゆれで重複エントリが発生
+- 修正済み: `extract_ip._call_gateway` のコードブロック付きJSONパース失敗（ADR参照）
+
+設計方針（ADR-0010）:
+- 正規IP空間 = AniList/Holodex等の信頼できるソースが定義するエンティティの集合
+- IP名寄せ = イベントタイトル → 正規空間への写像として再定義
+- 次のステップ: KEN-90でジャンル別の正規ソースを選定（設計のみ、実装なし）
+
 **KEN-67: ソースon/off設定ファイル化**（未着手）
 - `sources.yaml` で enabled/tier/schedule を管理
 - pipeline_v2 起動時に読み込む
@@ -68,3 +81,4 @@ ssh k12 "sudo systemctl start otakuracy && journalctl -u otakuracy -f"
 
 - Date: 2026-03-21
 - Pipeline実行: `uv run python -m cli_v2 run` で動作確認済み（discover/extract_ip/dedup/persistの4ステージ）
+- IP名寄せ検証: Gateway(http://127.0.0.1:18080 SSHトンネル経由)込みで32%識別率を確認
