@@ -60,7 +60,14 @@ JSON配列で返してください（タイトルと同じ順序）:
     if not result.get("success"):
         raise RuntimeError(f"Gateway error: {result.get('error_message')}")
 
-    parsed = json.loads(result["output_text"])
+    output = result["output_text"].strip()
+    # Haikuがコードブロック付きで返すケースを剥がす
+    if output.startswith("```"):
+        output = output.split("```")[1]
+        if output.startswith("json"):
+            output = output[4:]
+        output = output.strip()
+    parsed = json.loads(output)
     return [
         IpExtraction(
             title=titles[i],
