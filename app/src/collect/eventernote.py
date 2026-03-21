@@ -73,7 +73,8 @@ class EventernoteClient:
         time_span = li.select_one("div.event > div.place > span.s")
         time_str = time_span.get_text(strip=True) if time_span else ""
 
-        date_p = li.select_one("div.date > p.day1")
+        # class is day0-day6 depending on day of week
+        date_p = li.select_one("div.date > p[class^='day']")
         date_str = date_p.get_text(strip=True) if date_p else ""
 
         return {
