@@ -17,6 +17,40 @@ def normalize_title(title: str) -> str:
     return t
 
 
+def normalize_venue(venue: str) -> str:
+    """会場名の正規化（NFKC + lowercase + 空白除去）。"""
+    v = unicodedata.normalize("NFKC", venue)
+    v = re.sub(r"[\s　]+", "", v).lower()
+    return v
+
+
+def _same_event(a: RawEventRecord, a_ip: str | None,
+                b: RawEventRecord, b_ip: str | None) -> bool:
+    """
+    同一イベント判定:
+    1. date + venue + ip が全て一致 → 確実に同一
+    2. date + ip が一致 + title類似(≥0.6) → 高確率同一
+    3. date + venue が一致（ip不明の場合のフォールバック）
+    """
+    date_a = (a.raw_date_text or "")[:10]
+    date_b = (b.raw_date_text or "")[:10]
+    if not date_a or not date_b or date_a != date_b:
+        return False
+
+    venue_a = normalize_venue(a.raw_venue_text or "")
+    venue_b = normalize_venue(b.raw_venue_text or "")
+    venue_match = bool(venue_a and venue_b and venue_a == venue_b)
+    ip_match = bool(a_ip and b_ip and a_ip == b_ip)
+
+    if venue_match and ip_match:
+        return True
+    if venue_match and not a_ip and not b_ip:
+        return True  # ip不明だが日付+会場が一致
+    if ip_match and title_similarity(a.raw_title, b.raw_title) >= 0.6:
+        return True
+    return False
+
+
 def title_similarity(a: str, b: str) -> float:
     """Jaccard similarity on character 2-grams of normalized titles."""
     na, nb = normalize_title(a), normalize_title(b)
@@ -40,11 +74,17 @@ class DeduplicatedEvent:
     merge_score: float  # 最高スコア（同一ソース内は 1.0）
 
 
-def dedup_within_source(records: list[RawEventRecord]) -> list[DeduplicatedEvent]:
+def dedup_within_source(
+    records: list[RawEventRecord],
+    ip_map: dict[str, str | None] | None = None,  # {source_url: ip_id}
+) -> list[DeduplicatedEvent]:
     """
-    Source内 dedup (KEN-75).
-    同一ソース内で正規化タイトル+日付が近いものをマージ。
+    Source内 dedup (KEN-75 / KEN-82).
+    同一ソース内で日付+会場+IPに基づいてマージ。
     """
+    if ip_map is None:
+        ip_map = {}
+
     results: list[DeduplicatedEvent] = []
     used = set()
 
@@ -52,16 +92,12 @@ def dedup_within_source(records: list[RawEventRecord]) -> list[DeduplicatedEvent
         if i in used:
             continue
         group = [rec]
+        rec_ip = ip_map.get(rec.source_url)
         for j, other in enumerate(records):
             if j <= i or j in used:
                 continue
-            sim = title_similarity(rec.raw_title, other.raw_title)
-            # 日付も一致している場合のみマージ
-            date_match = (
-                rec.raw_date_text and other.raw_date_text and
-                rec.raw_date_text[:10] == other.raw_date_text[:10]
-            )
-            if sim >= 0.8 and date_match:
+            other_ip = ip_map.get(other.source_url)
+            if _same_event(rec, rec_ip, other, other_ip):
                 group.append(other)
                 used.add(j)
         used.add(i)
@@ -74,12 +110,16 @@ def dedup_within_source(records: list[RawEventRecord]) -> list[DeduplicatedEvent
 
 
 def merge_across_sources(
-    groups_by_source: dict[str, list[DeduplicatedEvent]]
+    groups_by_source: dict[str, list[DeduplicatedEvent]],
+    ip_map: dict[str, str | None] | None = None,
 ) -> list[DeduplicatedEvent]:
     """
-    Cross-source merge (KEN-76).
-    異なるソース間でタイトル類似度・日付近接でマージ。
+    Cross-source merge (KEN-76 / KEN-82).
+    異なるソース間で日付+会場+IPに基づいてマージ。
     """
+    if ip_map is None:
+        ip_map = {}
+
     all_events: list[DeduplicatedEvent] = []
     for source_events in groups_by_source.values():
         all_events.extend(source_events)
@@ -91,17 +131,14 @@ def merge_across_sources(
         if i in merged_indices:
             continue
         group = [ev]
+        ev_ip = ip_map.get(ev.primary.source_url)
         for j, other in enumerate(all_events):
             if j <= i or j in merged_indices:
                 continue
             if ev.primary.source_id == other.primary.source_id:
                 continue  # same source — already handled above
-            sim = title_similarity(ev.primary.raw_title, other.primary.raw_title)
-            date_match = (
-                ev.primary.raw_date_text and other.primary.raw_date_text and
-                ev.primary.raw_date_text[:10] == other.primary.raw_date_text[:10]
-            )
-            if sim >= 0.7 and date_match:
+            other_ip = ip_map.get(other.primary.source_url)
+            if _same_event(ev.primary, ev_ip, other.primary, other_ip):
                 group.append(other)
                 merged_indices.add(j)
         merged_indices.add(i)
