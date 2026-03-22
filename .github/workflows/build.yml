@@ -43,18 +43,12 @@ jobs:
           file: container/Containerfile
           push: true
           tags: |
-            ghcr.io/ishii2025buziness/otakuracy-service:latest
-            ghcr.io/ishii2025buziness/otakuracy-service:${{ github.run_id }}
+            ghcr.io/ishii2025buziness/otakuracy:latest
+            ghcr.io/ishii2025buziness/otakuracy:${{ github.run_id }}
 
   deploy:
     needs: build
     runs-on: self-hosted
     steps:
       - name: Deploy
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_ACTOR: ${{ github.actor }}
-        run: |
-          echo "$GH_TOKEN" | podman login ghcr.io -u "$GH_ACTOR" --password-stdin
-          podman pull ghcr.io/ishii2025buziness/otakuracy-service:latest
-          echo 'Deploy OK: otakuracy-service image updated'
+        run: sudo /run/current-system/sw/bin/systemctl restart otakuracy
