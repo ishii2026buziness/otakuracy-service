@@ -48,26 +48,13 @@ jobs:
 
   deploy:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
-      - name: Setup Tailscale
-        uses: tailscale/github-action@v2
-        with:
-          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
-          tags: tag:ci
-
-      - name: Setup SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.CI_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-
-      - name: Deploy to K12
+      - name: Deploy
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_ACTOR: ${{ github.actor }}
         run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 kento@k12 \
-            "echo '$GH_TOKEN' | podman login ghcr.io -u '$GH_ACTOR' --password-stdin \
-            && podman pull ghcr.io/ishii2025buziness/otakuracy-service:latest \
-            && echo 'Deploy OK: otakuracy-service image updated'"
+          echo "$GH_TOKEN" | podman login ghcr.io -u "$GH_ACTOR" --password-stdin
+          podman pull ghcr.io/ishii2025buziness/otakuracy-service:latest
+          echo 'Deploy OK: otakuracy-service image updated'
