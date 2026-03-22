@@ -51,4 +51,4 @@ jobs:
     runs-on: self-hosted
     steps:
       - name: Deploy
-        run: sudo /run/current-system/sw/bin/systemctl restart otakuracy
+        run: systemctl restart otakuracy
