@@ -43,8 +43,8 @@ jobs:
           file: container/Containerfile
           push: true
           tags: |
-            ghcr.io/ishii2025buziness/otakuracy:latest
-            ghcr.io/ishii2025buziness/otakuracy:${{ github.run_id }}
+            ghcr.io/ishii2026buziness/otakuracy:latest
+            ghcr.io/ishii2026buziness/otakuracy:${{ github.run_id }}
 
   deploy:
     needs: build
