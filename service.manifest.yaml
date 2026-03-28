@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://github.com/ishii2025buziness/k12-network-notes/raw/main/schemas/service-manifest.schema.json
+
+name: otakuracy
+description: Daily anime/otaku event discovery — fetch all sources, dedup, persist processed events
+
+process:
+  entrypoint: python -m cli run
+  workdir: app
+
+input:
+  - type: file
+    name: whitelist
+    description: Whitelisted event sources at data/whitelist.json
+  - type: external_api
+    name: event_sources
+    description: Anime/otaku event websites and APIs
+  - type: claude_api
+    name: claude
+    description: Event classification and enrichment via Claude API (claude-gateway)
+
+output:
+  - name: events
+    path: data/events/
+    format: json
+    description: Discovered and processed event data
+  - name: processed
+    path: data/events_processed.json
+    format: json
+    description: Deduplicated processed events index
+
+successCriteria:
+  - exitCode: 0
+  - freshArtifact:
+      path: data/events_processed.json
+      maxAgeHours: 25
