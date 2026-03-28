@@ -7,15 +7,12 @@ on:
     branches: [master, main]
 
 jobs:
-  manifest:
+  validate:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
-          token: ${{ secrets.GH_PAT }}
 
       - uses: actions/checkout@v4
         with:
@@ -24,30 +21,6 @@ jobs:
           token: ${{ secrets.GH_PAT }}
 
       - uses: astral-sh/setup-uv@v5
-
-      - name: Check manifest exists
-        id: check
-        run: |
-          if [ -f service.manifest.yaml ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Generate manifest
-        if: steps.check.outputs.exists == 'false'
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: uv run .k12-pe/tools/gen_manifest.py .
-
-      - name: Commit generated manifest
-        if: steps.check.outputs.exists == 'false'
-        run: |
-          git config user.name "k12-pe-bot"
-          git config user.email "k12-pe-bot@github.com"
-          git add service.manifest.yaml
-          git diff --cached --quiet || git commit -m "chore: auto-generate service.manifest.yaml [skip ci]"
-          git push
 
       - name: Validate manifest
         run: uv run .k12-pe/tools/validate_manifest.py .

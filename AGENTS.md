@@ -50,3 +50,14 @@ git submodule update --remote infra
 - `docs/architecture.md` — このテンプレートの設計意図と決定理由。
 
 将来のエージェントが必要とする知識（設計決定の理由、契約、運用ルール等）は`docs/`以下に書いてAGENTS.mdから参照せよ。一時的な作業メモや実装詳細は残さない。
+
+## Service Manifest
+
+`service.manifest.yaml` はSE/PEの境界インタフェース。
+**このファイルが存在しない場合、作業開始前に必ず生成すること。**
+
+- スキーマ: https://github.com/ishii2025buziness/k12-network-notes/blob/main/schemas/service-manifest.schema.json
+- 宣言するもの: `name`, `input`, `process`, `output`, `successCriteria`
+- 宣言しないもの: schedule / secrets / metrics / alerts / deploy（Platform側の責務）
+
+生成手順: `app/src/pipeline.py` 等を読んでスキーマに従いYAMLを生成し、CIのvalidationが通ることを確認する。
