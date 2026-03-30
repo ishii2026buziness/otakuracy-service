@@ -1,3 +1,6 @@
 [submodule "common"]
 	path = common
 	url = https://github.com/ishii2025buziness/pipeline-common
+[submodule "infra"]
+	path = infra
+	url = https://github.com/ishii2025buziness/k12-network-notes

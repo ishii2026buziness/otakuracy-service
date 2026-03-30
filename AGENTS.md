@@ -21,7 +21,17 @@ git submodule update --init --recursive  # common submoduleを初期化
 ## Submodules
 
 - `common/` → [pipeline-common](https://github.com/ishii2025buziness/pipeline-common)（共通contracts・ヘルパー）
-- `infra/` → bootstrap時に設定するインフラリポ
+- `infra/` → [k12-network-notes](https://github.com/ishii2025buziness/k12-network-notes)（K12 IaC 正本）
+
+### infra/ の扱い（KEN-252 / 2026-03-30）
+
+`infra/` は `k12-network-notes` リポジトリの submodule です。
+
+- **`infra/` ディレクトリを直接編集しない**
+- K12 IaC の変更は必ず `k12-network-notes` 本体で行う:
+  `~/repos/github.com/ishii2025buziness/k12-network-notes`
+- submodule の参照先を更新する場合: `git submodule update --remote infra`
+- 詳細: `k12-network-notes/docs/adr/0008-iac-single-source-of-truth.md`
 
 ### submodule操作
 
