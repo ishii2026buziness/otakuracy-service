@@ -1,0 +1,11 @@
+name: Guard infra submodule
+on: [push, pull_request]
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Check infra submodule is clean
+        run: bash scripts/guard-infra.sh

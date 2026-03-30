@@ -33,6 +33,26 @@ git submodule update --init --recursive  # common submoduleを初期化
 - submodule の参照先を更新する場合: `git submodule update --remote infra`
 - 詳細: `k12-network-notes/docs/adr/0008-iac-single-source-of-truth.md`
 
+#### 二重更新ガード（KEN-252 残課題 / 2026-03-30）
+
+`scripts/guard-infra.sh` と `.github/workflows/guard-infra.yml` により、`infra/` への誤変更を検知する。
+
+- **CI**: PR/push 時に自動実行。`infra/` に uncommitted な変更があれば CI が失敗する。
+- **手動実行**: `bash scripts/guard-infra.sh`
+
+##### infra/ を誤って編集した場合の復旧手順
+
+```bash
+# 変更を破棄して submodule を元の状態に戻す
+git -C infra/ checkout .
+
+# または submodule を HEAD の参照先にリセット
+git submodule update --init infra
+
+# 確認
+bash scripts/guard-infra.sh
+```
+
 ### submodule操作
 
 ```bash
