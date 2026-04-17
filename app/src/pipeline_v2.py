@@ -47,8 +47,8 @@ class _DedupOutput(NamedTuple):
 
 async def run_pipeline_v2(
     db_path: Path = DB_PATH_DEFAULT,
-    eplus_pages: int = 5,
-    eventernote_pages: int = 10,
+    eplus_pages: int = 20,
+    eventernote_pages: int = 30,
 ) -> JobResult:
     """Main entry point for the new pipeline."""
     import uuid
