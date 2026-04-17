@@ -111,7 +111,7 @@ async def run_pipeline_v2(
     # Phase 1: fetch all months in parallel (max 4 months at once = 8 connections)
     print(f"[fetch] fetching {len(months)} months...", flush=True)
     fetch_t = time.monotonic()
-    with ThreadPoolExecutor(max_workers=len(months)) as pool:
+    with ThreadPoolExecutor(max_workers=2) as pool:
         futures = {pool.submit(_fetch_month, y, m): (y, m) for y, m in months}
         for f in as_completed(futures):
             ym = futures[f]

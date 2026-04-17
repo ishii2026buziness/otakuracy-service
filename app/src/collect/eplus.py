@@ -64,10 +64,13 @@ class EplusClient(EventSource):
 
     def collect_month(self, year: int, month: int, max_pages: int = 100) -> list[RawEventRecord]:
         """Fetch all events for a given month via /sf/event/month-MM."""
+        import time
         base_url = f"{BASE_URL}/sf/event/month-{month:02d}"
         seen_urls: set[str] = set()
         records = []
         for page in range(1, max_pages + 1):
+            if page > 1:
+                time.sleep(0.3)
             url = base_url if page == 1 else f"{base_url}/p{page}"
             try:
                 resp = self._get(url)
