@@ -1,9 +1,10 @@
 """
-New unified pipeline: discover -> dedup -> persist
-Replaces the old whitelist-based pipeline.
+New unified pipeline: discover -> dedup -> persist, one month at a time.
+Both sources fetched in parallel per month, committed per month.
 """
 import time
-from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import NamedTuple
 
@@ -22,201 +23,79 @@ JOB_NAME = "otakuracy_v2"
 DB_PATH_DEFAULT = Path("/data/otakuracy.db")
 
 
-# ---------------------------------------------------------------------------
-# Stage result carriers (StageResult has no metadata field)
-# ---------------------------------------------------------------------------
-
-class _DiscoverOutput(NamedTuple):
-    stage: StageResult
-    raw_by_source: dict[str, list[RawEventRecord]]
-
-
-class _ExtractIpOutput(NamedTuple):
-    stage: StageResult
-    ip_map: dict[str, tuple[str | None, float]]  # {source_url: (ip_id, confidence)}
-
-
-class _DedupOutput(NamedTuple):
-    stage: StageResult
-    merged_events: list[DeduplicatedEvent]
+def _generate_months(months_ahead: int) -> list[tuple[int, int]]:
+    """Return (year, month) tuples from current month for months_ahead months."""
+    today = date.today()
+    year, month = today.year, today.month
+    result = []
+    for _ in range(months_ahead + 1):
+        result.append((year, month))
+        month += 1
+        if month > 12:
+            month, year = 1, year + 1
+    return result
 
 
-# ---------------------------------------------------------------------------
-# Public entry point
-# ---------------------------------------------------------------------------
+def _fetch_month(year: int, month: int) -> dict[str, list[RawEventRecord]]:
+    """Fetch both sources for a given month in parallel threads."""
+    eplus = EplusClient()
+    eventernote = EventernoteClient()
 
-async def run_pipeline_v2(
-    db_path: Path = DB_PATH_DEFAULT,
-    eplus_pages: int = 44,
-    eventernote_pages: int = 50,
-) -> JobResult:
-    """Main entry point for the new pipeline."""
-    import uuid
-    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:6]
-    start = time.monotonic()
-    stages: list[StageResult] = []
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        f_eplus = pool.submit(eplus.collect_month, year, month)
+        f_en = pool.submit(eventernote.collect_month, year, month)
+        eplus_recs = f_eplus.result()
+        en_recs = f_en.result()
 
-    # Ensure DB exists
-    init_db(db_path)
-    conn = get_connection(db_path)
-
-    try:
-        # Stage 1: discover_events
-        discover_out = _stage_discover(eplus_pages, eventernote_pages)
-        stages.append(discover_out.stage)
-        if discover_out.stage.status == StageStatus.FAILED:
-            return _build_result(run_id, stages, start)
-
-        # Stage 2: extract_ip (Claude Gateway)
-        extract_ip_out = _stage_extract_ip(conn, discover_out.raw_by_source)
-        stages.append(extract_ip_out.stage)
-
-        # Stage 3: dedup (source-internal + cross-source)
-        dedup_out = _stage_dedup(discover_out.raw_by_source, extract_ip_out.ip_map)
-        stages.append(dedup_out.stage)
-
-        # Stage 4: persist to DB
-        persist_stage = _stage_persist(conn, dedup_out.merged_events, extract_ip_out.ip_map)
-        stages.append(persist_stage)
-
-    finally:
-        conn.close()
-
-    return _build_result(run_id, stages, start)
+    return {"eplus": eplus_recs, "eventernote": en_recs}
 
 
-# ---------------------------------------------------------------------------
-# Stage implementations
-# ---------------------------------------------------------------------------
-
-def _stage_discover(eplus_pages: int, eventernote_pages: int) -> _DiscoverOutput:
-    """Stage 1: Collect raw events from all primary sources."""
-    start = time.monotonic()
-    raw_by_source: dict[str, list[RawEventRecord]] = {}
-    total = 0
-    errors: list[str] = []
-
-    for source_cls, kwargs in [
-        (EplusClient, {"max_pages": eplus_pages}),
-        (EventernoteClient, {"pages": eventernote_pages}),
-    ]:
-        src = source_cls()
-        try:
-            records = src.collect_raw(**kwargs)
-            raw_by_source[src.SOURCE_ID] = records
-            total += len(records)
-        except Exception as e:
-            errors.append(f"{src.SOURCE_ID}: {e}")
-
-    if total == 0:
-        stage = StageResult(
-            status=StageStatus.FAILED,
-            stage="discover_events",
-            output_count=0,
-            warnings=errors,
-            failure_code=FailureCode.SOURCE_EMPTY,
-            duration_ms=int((time.monotonic() - start) * 1000),
-        )
-    else:
-        stage = StageResult(
-            status=StageStatus.SUCCESS,
-            stage="discover_events",
-            output_count=total,
-            warnings=errors,
-            duration_ms=int((time.monotonic() - start) * 1000),
-        )
-    return _DiscoverOutput(stage=stage, raw_by_source=raw_by_source)
-
-
-def _stage_extract_ip(
+def _process_month(
     conn,
+    year: int,
+    month: int,
     raw_by_source: dict[str, list[RawEventRecord]],
-) -> _ExtractIpOutput:
-    """Stage 2: IP extraction via Claude Gateway."""
-    from collect.extract_ip import extract_ip_batch
+) -> tuple[int, int]:
+    """Extract IP, dedup, persist one month. Returns (discovered, saved)."""
     import os
+    from collect.extract_ip import extract_ip_batch
 
-    start = time.monotonic()
     all_records = [r for recs in raw_by_source.values() for r in recs]
+    if not all_records:
+        return 0, 0
+
     ip_repo = IpRegistryRepo(conn)
     gateway_url = os.getenv("CLAUDE_GATEWAY_URL", "http://127.0.0.1:18080")
-
     ip_map = extract_ip_batch(all_records, ip_repo, gateway_url=gateway_url)
-    identified = sum(1 for v in ip_map.values() if v[0] is not None)
 
-    stage = StageResult(
-        status=StageStatus.SUCCESS,
-        stage="extract_ip",
-        input_count=len(all_records),
-        output_count=identified,
-        duration_ms=int((time.monotonic() - start) * 1000),
-    )
-    return _ExtractIpOutput(stage=stage, ip_map=ip_map)
+    # dedup
+    flat_ip = {url: ip_id for url, (ip_id, _c, _cat) in ip_map.items()}
+    deduped = {}
+    for source_id, recs in raw_by_source.items():
+        deduped[source_id] = dedup_within_source(recs, ip_map=flat_ip)
+    merged = merge_across_sources(deduped, ip_map=flat_ip)
 
-
-def _stage_dedup(
-    raw_by_source: dict[str, list[RawEventRecord]],
-    ip_map: dict[str, tuple[str | None, float]] | None = None,
-) -> _DedupOutput:
-    """Stage 3: Dedup within source then merge across sources."""
-    start = time.monotonic()
-    input_count = sum(len(v) for v in raw_by_source.values())
-
-    # Flatten ip_map from (ip_id, confidence, category) tuples to {url: ip_id}
-    flat_ip_map: dict[str, str | None] = {}
-    if ip_map:
-        flat_ip_map = {url: ip_id for url, (ip_id, _conf, _cat) in ip_map.items()}
-
-    deduped_by_source = {}
-    for source_id, records in raw_by_source.items():
-        deduped_by_source[source_id] = dedup_within_source(records, ip_map=flat_ip_map)
-
-    merged = merge_across_sources(deduped_by_source, ip_map=flat_ip_map)
-
-    stage = StageResult(
-        status=StageStatus.SUCCESS,
-        stage="dedup",
-        input_count=input_count,
-        output_count=len(merged),
-        duration_ms=int((time.monotonic() - start) * 1000),
-    )
-    return _DedupOutput(stage=stage, merged_events=merged)
-
-
-def _stage_persist(
-    conn,
-    merged_events: list[DeduplicatedEvent],
-    ip_map: dict[str, tuple[str | None, float, str]] | None = None,
-) -> StageResult:
-    """Stage 4: Persist deduplicated events and source records to SQLite."""
-    start = time.monotonic()
+    # persist
     src_repo = EventSourceRecordRepo(conn)
     event_repo = EventRepo(conn)
     ip_link_repo = EventIpLinkRepo(conn)
-    if ip_map is None:
-        ip_map = {}
     saved = 0
 
-    for dedup_ev in merged_events:
-        recs = [dedup_ev.primary] + list(dedup_ev.merged)
-        for rec in recs:
-            if src_repo.exists_by_url(rec.source_url):
-                continue
-            src_repo.insert({
-                "source_id": rec.source_id,
-                "source_url": rec.source_url,
-                "fetched_at": rec.fetched_at.isoformat(),
-                "raw_title": rec.raw_title,
-                "raw_date_text": rec.raw_date_text,
-                "raw_venue_text": rec.raw_venue_text,
-                "raw_price_text": rec.raw_price_text,
-                "raw_body": rec.raw_body,
-            })
-        # Determine category from primary record's IP entry
+    for dedup_ev in merged:
+        for rec in [dedup_ev.primary] + list(dedup_ev.merged):
+            if not src_repo.exists_by_url(rec.source_url):
+                src_repo.insert({
+                    "source_id": rec.source_id,
+                    "source_url": rec.source_url,
+                    "fetched_at": rec.fetched_at.isoformat(),
+                    "raw_title": rec.raw_title,
+                    "raw_date_text": rec.raw_date_text,
+                    "raw_venue_text": rec.raw_venue_text,
+                    "raw_price_text": rec.raw_price_text,
+                    "raw_body": rec.raw_body,
+                })
         primary_entry = ip_map.get(dedup_ev.primary.source_url)
         category = primary_entry[2] if primary_entry else "other"
-
-        # Insert normalized event from primary record
         event_id = event_repo.insert({
             "title": dedup_ev.primary.raw_title,
             "official_url": dedup_ev.primary.source_url,
@@ -226,52 +105,88 @@ def _stage_persist(
             "category": category,
         })
         saved += 1
-
-        # Link event to IP via event_ip_link
-        for rec in recs:
+        for rec in [dedup_ev.primary] + list(dedup_ev.merged):
             entry = ip_map.get(rec.source_url)
-            if entry is not None:
-                ip_id, conf, _cat = entry
-                if ip_id:
-                    ip_link_repo.link(event_id, ip_id, confidence=conf)
+            if entry and entry[0]:
+                ip_link_repo.link(event_id, entry[0], confidence=entry[1])
 
-    return StageResult(
-        status=StageStatus.SUCCESS,
-        stage="persist",
-        input_count=len(merged_events),
-        output_count=saved,
-        duration_ms=int((time.monotonic() - start) * 1000),
-    )
+    conn.commit()
+    return len(all_records), saved
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+async def run_pipeline_v2(
+    db_path: Path = DB_PATH_DEFAULT,
+    months_ahead: int = 6,
+    # legacy params ignored but accepted for compat
+    eplus_pages: int = 0,
+    eventernote_pages: int = 0,
+) -> JobResult:
+    import uuid
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:6]
+    start = time.monotonic()
 
-def _build_result(run_id: str, stages: list[StageResult], start: float) -> JobResult:
+    init_db(db_path)
+    conn = get_connection(db_path)
+
+    months = _generate_months(months_ahead)
+    total_discovered = 0
+    total_saved = 0
+    stages: list[StageResult] = []
+
+    try:
+        for year, month in months:
+            month_label = f"{year}-{month:02d}"
+            t = time.monotonic()
+            try:
+                raw_by_source = _fetch_month(year, month)
+                discovered, saved = _process_month(conn, year, month, raw_by_source)
+                total_discovered += discovered
+                total_saved += saved
+                stages.append(StageResult(
+                    status=StageStatus.SUCCESS,
+                    stage=f"month_{month_label}",
+                    input_count=discovered,
+                    output_count=saved,
+                    duration_ms=int((time.monotonic() - t) * 1000),
+                ))
+                print(f"[{month_label}] {discovered} → {saved} saved", flush=True)
+            except Exception as e:
+                stages.append(StageResult(
+                    status=StageStatus.FAILED,
+                    stage=f"month_{month_label}",
+                    input_count=0,
+                    output_count=0,
+                    warnings=[str(e)],
+                    failure_code=FailureCode.SOURCE_EMPTY,
+                    duration_ms=int((time.monotonic() - t) * 1000),
+                ))
+                print(f"[{month_label}] ERROR: {e}", flush=True)
+    finally:
+        conn.close()
+
     failed = [s for s in stages if s.status == StageStatus.FAILED]
     if len(failed) == len(stages):
-        status, fc = JobStatus.FAILED, failed[0].failure_code
+        job_status, fc = JobStatus.FAILED, failed[0].failure_code
     elif failed:
-        status, fc = JobStatus.PARTIAL, None
+        job_status, fc = JobStatus.PARTIAL, None
     else:
-        status, fc = JobStatus.SUCCESS, None
+        job_status, fc = JobStatus.SUCCESS, None
+
     return JobResult(
-        status=status,
+        status=job_status,
         job_name=JOB_NAME,
         run_id=run_id,
         stages=stages,
-        artifact_root=Path("/data"),
+        artifact_root=db_path.parent,
         failure_code=fc,
         duration_ms=int((time.monotonic() - start) * 1000),
     )
 
 
 def smoke_check_v2() -> dict:
-    """Lightweight connectivity check."""
     import requests
     try:
-        r = requests.get("https://eplus.jp/sf/event/anime/tokyo", timeout=10)
+        r = requests.get("https://eplus.jp/sf/event/month-04", timeout=10)
         return {"ok": r.status_code < 500, "status_code": r.status_code}
     except Exception as e:
         return {"ok": False, "error": str(e)}

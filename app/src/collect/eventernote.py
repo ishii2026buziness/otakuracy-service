@@ -207,25 +207,21 @@ class EventernoteClient(EventSource):
                 )
         return records
 
-    def collect_raw(self, pages: int = 10, months_ahead: int = 12) -> list[RawEventRecord]:
-        """
-        Fetch events from today + 1st of each month for months_ahead months.
-        pages caps the per-date pagination.
-        """
+    def collect_month(self, year: int, month: int, max_pages: int = 20) -> list[RawEventRecord]:
+        """Fetch events for the 1st of the given month."""
+        seen_urls: set[str] = set()
+        return self._collect_from_date(date(year, month, 1), seen_urls, max_pages=max_pages)
+
+    def collect_raw(self, months_ahead: int = 6) -> list[RawEventRecord]:
+        """Collect today + 1st of each month for months_ahead months."""
         today = date.today()
         seen_urls: set[str] = set()
         records = []
-
-        # Today's events
-        records.extend(self._collect_from_date(today, seen_urls, max_pages=pages))
-
-        # 1st of each future month
+        records.extend(self._collect_from_date(today, seen_urls))
         year, month = today.year, today.month
         for _ in range(months_ahead):
             month += 1
             if month > 12:
-                month = 1
-                year += 1
-            records.extend(self._collect_from_date(date(year, month, 1), seen_urls, max_pages=pages))
-
+                month, year = 1, year + 1
+            records.extend(self._collect_from_date(date(year, month, 1), seen_urls))
         return records
