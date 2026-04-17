@@ -66,6 +66,7 @@ def _process_month(
     saved = 0
 
     for dedup_ev in merged:
+        primary_exists = src_repo.exists_by_url(dedup_ev.primary.source_url)
         for rec in [dedup_ev.primary] + list(dedup_ev.merged):
             if not src_repo.exists_by_url(rec.source_url):
                 src_repo.insert({
@@ -78,15 +79,16 @@ def _process_month(
                     "raw_price_text": rec.raw_price_text,
                     "raw_body": rec.raw_body,
                 })
-        event_repo.insert({
-            "title": dedup_ev.primary.raw_title,
-            "official_url": dedup_ev.primary.source_url,
-            "source_confidence": dedup_ev.merge_score,
-            "raw_date_text": dedup_ev.primary.raw_date_text,
-            "raw_venue_text": dedup_ev.primary.raw_venue_text,
-            "category": "other",
-        })
-        saved += 1
+        if not primary_exists:
+            event_repo.insert({
+                "title": dedup_ev.primary.raw_title,
+                "official_url": dedup_ev.primary.source_url,
+                "source_confidence": dedup_ev.merge_score,
+                "raw_date_text": dedup_ev.primary.raw_date_text,
+                "raw_venue_text": dedup_ev.primary.raw_venue_text,
+                "category": "other",
+            })
+            saved += 1
 
     conn.commit()
     return len(all_records), saved
@@ -109,7 +111,7 @@ async def run_pipeline_v2(
     # Phase 1: fetch all months in parallel (max 4 months at once = 8 connections)
     print(f"[fetch] fetching {len(months)} months...", flush=True)
     fetch_t = time.monotonic()
-    with ThreadPoolExecutor(max_workers=min(len(months), 4)) as pool:
+    with ThreadPoolExecutor(max_workers=len(months)) as pool:
         futures = {pool.submit(_fetch_month, y, m): (y, m) for y, m in months}
         for f in as_completed(futures):
             ym = futures[f]

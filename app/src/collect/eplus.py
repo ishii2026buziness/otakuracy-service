@@ -62,54 +62,37 @@ class EplusClient(EventSource):
             "url": BASE_URL + href if href.startswith("/") else href,
         }
 
-    def _fetch_page_items(self, url: str) -> list:
-        """Fetch a single page, return parsed list items (empty on error/no content)."""
-        try:
-            resp = self._get(url)
-        except requests.HTTPError as e:
-            print(f"eplus HTTP error {url}: {e}", file=sys.stderr)
-            return []
-        return BeautifulSoup(resp.text, "html.parser").select("a.ticket-item.ticket-item--kouen")
-
-    def collect_month(self, year: int, month: int, max_pages: int = 100, page_batch: int = 5) -> list[RawEventRecord]:
-        """Fetch all events for a given month via /sf/event/month-MM, pages fetched in parallel batches."""
-        from concurrent.futures import ThreadPoolExecutor, as_completed
+    def collect_month(self, year: int, month: int, max_pages: int = 100) -> list[RawEventRecord]:
+        """Fetch all events for a given month via /sf/event/month-MM."""
         base_url = f"{BASE_URL}/sf/event/month-{month:02d}"
         seen_urls: set[str] = set()
         records = []
-
-        for batch_start in range(1, max_pages + 1, page_batch):
-            batch_pages = list(range(batch_start, min(batch_start + page_batch, max_pages + 1)))
-            urls = [base_url if p == 1 else f"{base_url}/p{p}" for p in batch_pages]
-
-            with ThreadPoolExecutor(max_workers=len(batch_pages)) as pool:
-                futures = {pool.submit(self._fetch_page_items, u): p for u, p in zip(urls, batch_pages)}
-                page_items = {futures[f]: f.result() for f in as_completed(futures)}
-
-            stop = False
-            for p in batch_pages:
-                items = page_items[p]
-                if not items:
-                    stop = True
-                    break
-                for a in items:
-                    ev = self._parse_event(a)
-                    if not ev["url"] or ev["url"] in seen_urls:
-                        continue
-                    seen_urls.add(ev["url"])
-                    records.append(RawEventRecord(
-                        source_id="eplus",
-                        source_url=ev["url"],
-                        fetched_at=datetime.now(timezone.utc),
-                        raw_title=ev["title"],
-                        raw_date_text=" / ".join(ev["dates"]) if ev.get("dates") else None,
-                        raw_venue_text=f"{ev['venue']} ({ev['prefecture']})" if ev.get("venue") else None,
-                        raw_price_text=None,
-                        raw_body=ev["time"],
-                        structured_fields={"dates": ev.get("dates", [])},
-                    ))
-            if stop:
+        for page in range(1, max_pages + 1):
+            url = base_url if page == 1 else f"{base_url}/p{page}"
+            try:
+                resp = self._get(url)
+            except requests.HTTPError as e:
+                print(f"eplus HTTP error {url}: {e}", file=sys.stderr)
                 break
+            items = BeautifulSoup(resp.text, "html.parser").select("a.ticket-item.ticket-item--kouen")
+            if not items:
+                break
+            for a in items:
+                ev = self._parse_event(a)
+                if not ev["url"] or ev["url"] in seen_urls:
+                    continue
+                seen_urls.add(ev["url"])
+                records.append(RawEventRecord(
+                    source_id="eplus",
+                    source_url=ev["url"],
+                    fetched_at=datetime.now(timezone.utc),
+                    raw_title=ev["title"],
+                    raw_date_text=" / ".join(ev["dates"]) if ev.get("dates") else None,
+                    raw_venue_text=f"{ev['venue']} ({ev['prefecture']})" if ev.get("venue") else None,
+                    raw_price_text=None,
+                    raw_body=ev["time"],
+                    structured_fields={"dates": ev.get("dates", [])},
+                ))
         return records
 
     def collect_raw(self, months_ahead: int = 6) -> list[RawEventRecord]:

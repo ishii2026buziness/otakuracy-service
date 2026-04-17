@@ -175,50 +175,36 @@ class EventernoteClient(EventSource):
         start_date: date,
         seen_urls: set[str],
         max_pages: int = 20,
-        page_batch: int = 5,
     ) -> list[RawEventRecord]:
-        """Fetch all pages starting from start_date, stopping when empty. Pages fetched in parallel batches."""
-        from concurrent.futures import ThreadPoolExecutor, as_completed as _as_completed
+        """Fetch all pages starting from start_date, stopping when empty."""
         date_str = f"{start_date.year}-{start_date.month}-{start_date.day}"
         records = []
-
-        for batch_start in range(1, max_pages + 1, page_batch):
-            batch_pages = list(range(batch_start, min(batch_start + page_batch, max_pages + 1)))
-
-            with ThreadPoolExecutor(max_workers=len(batch_pages)) as pool:
-                futures = {pool.submit(self.fetch_event_list_page, date_str, p): p for p in batch_pages}
-                page_items = {futures[f]: f.result() for f in _as_completed(futures)}
-
-            stop = False
-            for p in batch_pages:
-                items = page_items[p]
-                if not items:
-                    stop = True
-                    break
-                for li in items:
-                    ev = self._parse_event_from_li(li, actor_id="")
-                    if not ev or ev["url"] in seen_urls:
-                        continue
-                    seen_urls.add(ev["url"])
-                    records.append(
-                        RawEventRecord(
-                            source_id="eventernote",
-                            source_url=ev["url"],
-                            fetched_at=datetime.now(timezone.utc),
-                            raw_title=ev["title"],
-                            raw_date_text=ev.get("date"),
-                            raw_venue_text=ev.get("venue"),
-                            raw_price_text=None,
-                            raw_body=ev.get("time"),
-                            structured_fields={
-                                "eventernote_id": ev.get("id", ""),
-                                "venue_url": ev.get("venue_url", ""),
-                                "actor_ids": [],
-                            },
-                        )
-                    )
-            if stop:
+        for page in range(1, max_pages + 1):
+            items = self.fetch_event_list_page(date_str, page)
+            if not items:
                 break
+            for li in items:
+                ev = self._parse_event_from_li(li, actor_id="")
+                if not ev or ev["url"] in seen_urls:
+                    continue
+                seen_urls.add(ev["url"])
+                records.append(
+                    RawEventRecord(
+                        source_id="eventernote",
+                        source_url=ev["url"],
+                        fetched_at=datetime.now(timezone.utc),
+                        raw_title=ev["title"],
+                        raw_date_text=ev.get("date"),
+                        raw_venue_text=ev.get("venue"),
+                        raw_price_text=None,
+                        raw_body=ev.get("time"),
+                        structured_fields={
+                            "eventernote_id": ev.get("id", ""),
+                            "venue_url": ev.get("venue_url", ""),
+                            "actor_ids": [],
+                        },
+                    )
+                )
         return records
 
     def collect_month(self, year: int, month: int, max_pages: int = 20) -> list[RawEventRecord]:
