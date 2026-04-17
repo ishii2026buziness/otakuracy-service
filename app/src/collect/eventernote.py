@@ -27,7 +27,7 @@ class EventernoteClient(EventSource):
         self.session.headers.update({"User-Agent": USER_AGENT})
 
     def _get(self, url: str, **kwargs) -> requests.Response:
-        resp = self.session.get(url, timeout=30, **kwargs)
+        resp = self.session.get(url, timeout=10, **kwargs)
         resp.raise_for_status()
         return resp
 
