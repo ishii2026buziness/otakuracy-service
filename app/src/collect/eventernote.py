@@ -170,19 +170,24 @@ class EventernoteClient(EventSource):
                     events.append(ev)
         return events
 
-    def collect_raw(self, pages: int = 10) -> list[RawEventRecord]:
-        """Fetch raw events from Eventernote and return as RawEventRecord list."""
-        today = date.today()
-        date_str = f"{today.year}-{today.month}-{today.day}"
+    def _collect_from_date(
+        self,
+        start_date: date,
+        seen_urls: set[str],
+        max_pages: int = 20,
+    ) -> list[RawEventRecord]:
+        """Fetch all pages starting from start_date, stopping when empty."""
+        date_str = f"{start_date.year}-{start_date.month}-{start_date.day}"
         records = []
-        for page in range(1, pages + 1):
+        for page in range(1, max_pages + 1):
             items = self.fetch_event_list_page(date_str, page)
             if not items:
                 break
             for li in items:
                 ev = self._parse_event_from_li(li, actor_id="")
-                if not ev:
+                if not ev or ev["url"] in seen_urls:
                     continue
+                seen_urls.add(ev["url"])
                 records.append(
                     RawEventRecord(
                         source_id="eventernote",
@@ -200,4 +205,27 @@ class EventernoteClient(EventSource):
                         },
                     )
                 )
+        return records
+
+    def collect_raw(self, pages: int = 10, months_ahead: int = 12) -> list[RawEventRecord]:
+        """
+        Fetch events from today + 1st of each month for months_ahead months.
+        pages caps the per-date pagination.
+        """
+        today = date.today()
+        seen_urls: set[str] = set()
+        records = []
+
+        # Today's events
+        records.extend(self._collect_from_date(today, seen_urls, max_pages=pages))
+
+        # 1st of each future month
+        year, month = today.year, today.month
+        for _ in range(months_ahead):
+            month += 1
+            if month > 12:
+                month = 1
+                year += 1
+            records.extend(self._collect_from_date(date(year, month, 1), seen_urls, max_pages=pages))
+
         return records
