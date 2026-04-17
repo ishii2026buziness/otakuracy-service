@@ -4,7 +4,7 @@ Phase 1 (network): all months fetched concurrently.
 Phase 2 (DB): process months sequentially, commit per month.
 """
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -108,18 +108,21 @@ async def run_pipeline_v2(
     raw_data: dict[tuple[int, int], dict[str, list[RawEventRecord]]] = {}
     fetch_errors: dict[tuple[int, int], Exception] = {}
 
-    # Phase 1: fetch months sequentially — eplus rate-limits concurrent month scrapers
+    # Phase 1: fetch all months in parallel; eplus empty-page retries handle rate limiting
     print(f"[fetch] fetching {len(months)} months...", flush=True)
     fetch_t = time.monotonic()
-    for y, m in months:
-        month_label = f"{y}-{m:02d}"
-        try:
-            raw_data[(y, m)] = _fetch_month(y, m)
-            total = sum(len(v) for v in raw_data[(y, m)].values())
-            print(f"[fetch] {month_label}: {total} records", flush=True)
-        except Exception as e:
-            fetch_errors[(y, m)] = e
-            print(f"[fetch] {month_label} ERROR: {e}", flush=True)
+    with ThreadPoolExecutor(max_workers=len(months)) as pool:
+        futures = {pool.submit(_fetch_month, y, m): (y, m) for y, m in months}
+        for f in as_completed(futures):
+            ym = futures[f]
+            month_label = f"{ym[0]}-{ym[1]:02d}"
+            try:
+                raw_data[ym] = f.result()
+                total = sum(len(v) for v in raw_data[ym].values())
+                print(f"[fetch] {month_label}: {total} records", flush=True)
+            except Exception as e:
+                fetch_errors[ym] = e
+                print(f"[fetch] {month_label} ERROR: {e}", flush=True)
     print(f"[fetch] done in {time.monotonic()-fetch_t:.1f}s", flush=True)
 
     # Phase 2: process into DB

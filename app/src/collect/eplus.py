@@ -67,6 +67,7 @@ class EplusClient(EventSource):
         base_url = f"{BASE_URL}/sf/event/month-{month:02d}"
         seen_urls: set[str] = set()
         records = []
+        empty_streak = 0
         for page in range(1, max_pages + 1):
             url = base_url if page == 1 else f"{base_url}/p{page}"
             try:
@@ -76,7 +77,11 @@ class EplusClient(EventSource):
                 break
             items = BeautifulSoup(resp.text, "html.parser").select("a.ticket-item.ticket-item--kouen")
             if not items:
-                break
+                empty_streak += 1
+                if empty_streak >= 3:
+                    break
+                continue
+            empty_streak = 0
             for a in items:
                 ev = self._parse_event(a)
                 if not ev["url"] or ev["url"] in seen_urls:
