@@ -16,7 +16,7 @@ from collect.eventernote import EventernoteClient
 from collect.dedup_v2 import DeduplicatedEvent, dedup_within_source, merge_across_sources
 from db.repository import (
     init_db, get_connection,
-    EventSourceRecordRepo, EventRepo, EventIpLinkRepo, IpRegistryRepo,
+    EventSourceRecordRepo, EventRepo,
 )
 
 JOB_NAME = "otakuracy_v2"
@@ -56,29 +56,19 @@ def _process_month(
     month: int,
     raw_by_source: dict[str, list[RawEventRecord]],
 ) -> tuple[int, int]:
-    """Extract IP, dedup, persist one month. Returns (discovered, saved)."""
-    import os
-    from collect.extract_ip import extract_ip_batch
-
+    """Dedup and persist one month. Returns (discovered, saved)."""
     all_records = [r for recs in raw_by_source.values() for r in recs]
     if not all_records:
         return 0, 0
 
-    ip_repo = IpRegistryRepo(conn)
-    gateway_url = os.getenv("CLAUDE_GATEWAY_URL", "http://127.0.0.1:18080")
-    ip_map = extract_ip_batch(all_records, ip_repo, gateway_url=gateway_url)
-
-    # dedup
-    flat_ip = {url: ip_id for url, (ip_id, _c, _cat) in ip_map.items()}
+    # dedup without IP (IP extraction is a separate offline job)
     deduped = {}
     for source_id, recs in raw_by_source.items():
-        deduped[source_id] = dedup_within_source(recs, ip_map=flat_ip)
-    merged = merge_across_sources(deduped, ip_map=flat_ip)
+        deduped[source_id] = dedup_within_source(recs, ip_map={})
+    merged = merge_across_sources(deduped, ip_map={})
 
-    # persist
     src_repo = EventSourceRecordRepo(conn)
     event_repo = EventRepo(conn)
-    ip_link_repo = EventIpLinkRepo(conn)
     saved = 0
 
     for dedup_ev in merged:
@@ -94,21 +84,15 @@ def _process_month(
                     "raw_price_text": rec.raw_price_text,
                     "raw_body": rec.raw_body,
                 })
-        primary_entry = ip_map.get(dedup_ev.primary.source_url)
-        category = primary_entry[2] if primary_entry else "other"
-        event_id = event_repo.insert({
+        event_repo.insert({
             "title": dedup_ev.primary.raw_title,
             "official_url": dedup_ev.primary.source_url,
             "source_confidence": dedup_ev.merge_score,
             "raw_date_text": dedup_ev.primary.raw_date_text,
             "raw_venue_text": dedup_ev.primary.raw_venue_text,
-            "category": category,
+            "category": "other",
         })
         saved += 1
-        for rec in [dedup_ev.primary] + list(dedup_ev.merged):
-            entry = ip_map.get(rec.source_url)
-            if entry and entry[0]:
-                ip_link_repo.link(event_id, entry[0], confidence=entry[1])
 
     conn.commit()
     return len(all_records), saved
