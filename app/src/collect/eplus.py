@@ -1,4 +1,4 @@
-"""e+ (eplus.jp) HTML scraping client for anime event collection."""
+"""e+ (eplus.jp) HTML scraping client for anime/live event collection."""
 
 import re
 import sys
@@ -10,11 +10,24 @@ from bs4 import BeautifulSoup
 from .base import EventSource, RawEventRecord
 
 BASE_URL = "https://eplus.jp"
-ANIME_TOKYO_URL = f"{BASE_URL}/sf/event/anime/tokyo"
 USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 )
+
+# All categories to collect. Ordered roughly by relevance.
+COLLECT_CATEGORIES = [
+    "/sf/event/anime",        # アニメ・声優イベント
+    "/sf/event/game",         # ゲームイベント
+    "/sf/event/idol",         # アイドルイベント
+    "/sf/event/exhibition",   # 展示会・博覧会
+    "/sf/event/musical",      # ミュージカル
+    "/sf/live/idol",          # アイドルライブ
+    "/sf/live/voiceactor-live",  # 声優ライブ
+    "/sf/live/anime-song",    # アニソン・歌い手・ボカロ
+    "/sf/live/game-music",    # ゲーム音楽ライブ
+    "/sf/live/j-pop",         # J-POPライブ
+]
 
 
 class EplusClient(EventSource):
@@ -81,9 +94,9 @@ class EplusClient(EventSource):
             "url": url,
         }
 
-    def _fetch_page(self, page: int) -> list[dict]:
-        """Fetch one page of anime/tokyo event listing."""
-        url = ANIME_TOKYO_URL if page == 1 else f"{ANIME_TOKYO_URL}/p{page}"
+    def _fetch_page(self, category_url: str, page: int) -> list[dict]:
+        """Fetch one page of a category event listing."""
+        url = category_url if page == 1 else f"{category_url}/p{page}"
         try:
             resp = self._get(url)
         except requests.HTTPError as e:
@@ -93,41 +106,31 @@ class EplusClient(EventSource):
         items = soup.select("a.ticket-item.ticket-item--kouen")
         return [self._parse_event(a) for a in items]
 
-    def _total_pages(self) -> int:
-        """Get total number of pages from the first page."""
-        try:
-            resp = self._get(ANIME_TOKYO_URL)
-        except requests.HTTPError:
-            return 1
-        soup = BeautifulSoup(resp.text, "html.parser")
-        status = soup.select_one("p.block-paginator__status")
-        if not status:
-            return 1
-        # "1313件中　1～50件表示"
-        m = re.search(r"(\d+)件中", status.get_text())
-        if not m:
-            return 1
-        total = int(m.group(1))
-        return (total + 49) // 50  # 50件/ページ
-
-    def collect_events(self, max_pages: int = 5) -> list[dict]:
+    def collect_events(self, max_pages: int = 50) -> list[dict]:
         """
-        Return anime/tokyo events from e+.
+        Return events from all categories in COLLECT_CATEGORIES.
+        Deduplicates by URL across categories.
 
         Output: [{
             title, dates, time, venue, prefecture,
             accept_type, status, url
         }, ...]
         """
+        seen_urls: set[str] = set()
         events = []
-        for page in range(1, max_pages + 1):
-            items = self._fetch_page(page)
-            if not items:
-                break
-            events.extend(items)
+        for cat_path in COLLECT_CATEGORIES:
+            cat_url = f"{BASE_URL}{cat_path}"
+            for page in range(1, max_pages + 1):
+                items = self._fetch_page(cat_url, page)
+                if not items:
+                    break
+                for ev in items:
+                    if ev["url"] not in seen_urls:
+                        seen_urls.add(ev["url"])
+                        events.append(ev)
         return events
 
-    def collect_whitelist(self, max_pages: int = 5) -> list[dict]:
+    def collect_whitelist(self, max_pages: int = 50) -> list[dict]:
         """
         Return unique events (by title) as IP whitelist candidates.
 
