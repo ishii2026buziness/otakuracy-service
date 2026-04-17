@@ -217,6 +217,8 @@ def _stage_persist(
             "title": dedup_ev.primary.raw_title,
             "official_url": dedup_ev.primary.source_url,
             "source_confidence": dedup_ev.merge_score,
+            "raw_date_text": dedup_ev.primary.raw_date_text,
+            "raw_venue_text": dedup_ev.primary.raw_venue_text,
         })
         saved += 1
 

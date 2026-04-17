@@ -1,10 +1,29 @@
 """SQLite repository layer for otakuracy."""
+import hashlib
 import json
+import re
 import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+
+
+def _parse_date(raw_date_text: str | None) -> str | None:
+    """'2026/4/12(日)' or '2026-04-12' → 'YYYY-MM-DD'. Takes first date if multiple."""
+    if not raw_date_text:
+        return None
+    m = re.search(r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", raw_date_text)
+    if not m:
+        return None
+    return f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+
+
+def _make_event_id(title: str, start_date: str | None) -> str:
+    """Deterministic event_id from title + start_date to prevent duplicate inserts."""
+    key = f"{title}|{start_date or ''}"
+    h = hashlib.sha1(key.encode()).hexdigest()
+    return f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}"
 
 
 def _json_field(value) -> str:
@@ -204,16 +223,18 @@ class EventRepo:
         self.conn = conn
 
     def insert(self, record: dict) -> str:
-        """Insert a new event. Returns event_id."""
-        event_id = str(uuid.uuid4())
+        """Insert event if not exists (idempotent). Returns event_id."""
+        title = record["title"]
+        start_at = record.get("start_at") or _parse_date(record.get("raw_date_text"))
+        event_id = _make_event_id(title, start_at)
         now = datetime.now(timezone.utc).isoformat()
         row = {
             "event_id": event_id,
-            "title": record["title"],
+            "title": title,
             "summary": record.get("summary"),
             "category": record.get("category"),
             "status": record.get("status", "announced"),
-            "start_at": record.get("start_at"),
+            "start_at": start_at,
             "end_at": record.get("end_at"),
             "tz": record.get("tz", "Asia/Tokyo"),
             "venue_id": record.get("venue_id"),
@@ -228,11 +249,11 @@ class EventRepo:
             "ticketing_type": record.get("ticketing_type", "unknown"),
             "source_confidence": record.get("source_confidence", 0.5),
             "first_seen_at": record.get("first_seen_at", now),
-            "last_seen_at": record.get("last_seen_at", now),
+            "last_seen_at": now,
         }
         self.conn.execute(
             """
-            INSERT INTO event
+            INSERT OR IGNORE INTO event
                 (event_id, title, summary, category, status, start_at, end_at, tz,
                  venue_id, area_code, is_online, official_url, primary_ticket_url,
                  hero_image_url, price_min, price_max, currency, ticketing_type,
