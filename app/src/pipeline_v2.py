@@ -162,10 +162,10 @@ def _stage_dedup(
     start = time.monotonic()
     input_count = sum(len(v) for v in raw_by_source.values())
 
-    # Flatten ip_map from (ip_id, confidence) tuples to {url: ip_id}
+    # Flatten ip_map from (ip_id, confidence, category) tuples to {url: ip_id}
     flat_ip_map: dict[str, str | None] = {}
     if ip_map:
-        flat_ip_map = {url: ip_id for url, (ip_id, _conf) in ip_map.items()}
+        flat_ip_map = {url: ip_id for url, (ip_id, _conf, _cat) in ip_map.items()}
 
     deduped_by_source = {}
     for source_id, records in raw_by_source.items():
@@ -186,7 +186,7 @@ def _stage_dedup(
 def _stage_persist(
     conn,
     merged_events: list[DeduplicatedEvent],
-    ip_map: dict[str, tuple[str | None, float]] | None = None,
+    ip_map: dict[str, tuple[str | None, float, str]] | None = None,
 ) -> StageResult:
     """Stage 4: Persist deduplicated events and source records to SQLite."""
     start = time.monotonic()
@@ -212,6 +212,10 @@ def _stage_persist(
                 "raw_price_text": rec.raw_price_text,
                 "raw_body": rec.raw_body,
             })
+        # Determine category from primary record's IP entry
+        primary_entry = ip_map.get(dedup_ev.primary.source_url)
+        category = primary_entry[2] if primary_entry else "other"
+
         # Insert normalized event from primary record
         event_id = event_repo.insert({
             "title": dedup_ev.primary.raw_title,
@@ -219,6 +223,7 @@ def _stage_persist(
             "source_confidence": dedup_ev.merge_score,
             "raw_date_text": dedup_ev.primary.raw_date_text,
             "raw_venue_text": dedup_ev.primary.raw_venue_text,
+            "category": category,
         })
         saved += 1
 
@@ -226,7 +231,7 @@ def _stage_persist(
         for rec in recs:
             entry = ip_map.get(rec.source_url)
             if entry is not None:
-                ip_id, conf = entry
+                ip_id, conf, _cat = entry
                 if ip_id:
                     ip_link_repo.link(event_id, ip_id, confidence=conf)
 

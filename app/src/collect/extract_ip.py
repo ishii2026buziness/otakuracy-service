@@ -14,6 +14,7 @@ class IpExtraction:
     title: str
     ip_name: str | None   # None = 不明
     confidence: float     # 0.0〜1.0
+    category: str = "other"
 
 
 def _call_gateway(titles: list[str], gateway_url: str) -> list[IpExtraction]:
@@ -21,33 +22,40 @@ def _call_gateway(titles: list[str], gateway_url: str) -> list[IpExtraction]:
     Haiku にバッチでタイトルを送り IP 名を抽出する。
     戻り値は titles と同じ順序の IpExtraction リスト。
     """
-    prompt = f"""以下のイベントタイトルリストを解析し、各イベントに紐づく「IP」を抽出してください。
+    prompt = f"""以下のイベントタイトルリストを解析し、各イベントのIPとカテゴリを返してください。
 
-IPの定義（これに該当するもののみ抽出）:
-- アニメ・マンガ・ゲーム・小説などの商業作品タイトル
-- 音楽アーティスト・バンド・声優の名前
-- VTuber・アイドルグループの名前
-- キャラクター単体よりも作品名を優先
+IPの定義（これに該当するもののみ ip_name を返す）:
+- 広く知られたアニメ・マンガ・ゲーム・小説などの商業作品タイトル
+- 全国流通レベルの音楽アーティスト・バンド・声優
+- 有名VTuber・全国区アイドルグループ
 
-nullにすべきケース（IPではない）:
-- イベント固有のサブタイトルや企画名（例:「調査のご依頼、お待ちしてます!」「417の日」）
+ip_name を null にすべきケース:
+- 小規模・インディーズ・無名のアーティスト（知名度が判断できない場合も含む）
+- イベント固有のサブタイトルや企画名
 - 会場名・主催者名・スポンサー名
-- 汎用的な言葉（「ライブ」「コンサート」「フェス」等）
-- 複数IPのコラボで特定IPに帰属できない場合
+- 演劇・朗読劇のタイトル（商業IPでない場合）
+- 確信が持てない場合（誤検出より未検出を優先）
+
+categoryの値（必ずいずれか1つ）:
+- "anime" : アニメ・マンガ・ゲーム作品関連
+- "music" : 音楽ライブ・コンサート・リリイベ
+- "voice_actor" : 声優イベント
+- "idol" : アイドル・VTuber
+- "stage" : 舞台・ミュージカル・朗読劇
+- "sport" : スポーツ
+- "other" : 上記に当てはまらない、または判断できない
 
 ルール:
-- 複数IPが含まれる場合はメインのものを1つだけ返す
+- 複数IPが含まれる場合はメインのものを1つだけ
 - 正式な作品名・アーティスト名の表記を使う
-- 確信が低い場合はnullを返す（誤検出より未検出を優先）
-- confidenceは0.0〜1.0（0.8未満ならnullを推奨）
 
 タイトルリスト:
 {json.dumps(titles, ensure_ascii=False)}
 
 JSON配列で返してください（タイトルと同じ順序）:
 [
-  {{"ip_name": "推しの子", "confidence": 0.95}},
-  {{"ip_name": null, "confidence": 0.0}},
+  {{"ip_name": "推しの子", "confidence": 0.95, "category": "anime"}},
+  {{"ip_name": null, "confidence": 0.0, "category": "other"}},
   ...
 ]"""
 
@@ -85,6 +93,7 @@ JSON配列で返してください（タイトルと同じ順序）:
             title=titles[i],
             ip_name=item.get("ip_name"),
             confidence=float(item.get("confidence", 0.0)),
+            category=item.get("category", "other"),
         )
         for i, item in enumerate(parsed)
     ]
@@ -95,23 +104,21 @@ def extract_ip_batch(
     ip_repo,        # IpRegistryRepo
     gateway_url: str = GATEWAY_URL_DEFAULT,
     batch_size: int = 20,
-) -> dict[str, tuple[str | None, float]]:
+) -> dict[str, tuple[str | None, float, str]]:
     """
-    RawEventRecord リストの各タイトルから IP を抽出する。
+    RawEventRecord リストの各タイトルから IP とカテゴリを抽出する。
 
     戦略:
     1. ip_registry の display_name / aliases と文字列マッチ（コスト0）
     2. マッチしなかったものだけ Gateway（Haiku）でバッチ処理
     3. 抽出結果を ip_registry に candidate として upsert
 
-    Returns: {source_url: (ip_id or None, confidence)}
+    Returns: {source_url: (ip_id or None, confidence, category)}
     """
-    result: dict[str, tuple[str | None, float]] = {}
-    unmatched: list = []  # string-match で見つからなかった records
+    result: dict[str, tuple[str | None, float, str]] = {}
+    unmatched: list = []
 
     # 1. 文字列マッチ（ip_registry の既存エントリ）
-    # active/candidate 問わず全エントリを取得してマッチ
-    # IpRegistryRepo に list_all がないので直接 SQL
     all_ips = ip_repo.conn.execute(
         "SELECT ip_id, display_name, aliases FROM ip_registry"
     ).fetchall()
@@ -123,7 +130,6 @@ def extract_ip_batch(
             if row["display_name"].lower() in title_lower:
                 matched_id = row["ip_id"]
                 break
-            # aliases は JSON 配列
             try:
                 aliases = json.loads(row["aliases"] or "[]")
                 if any(a.lower() in title_lower for a in aliases):
@@ -132,7 +138,7 @@ def extract_ip_batch(
             except Exception:
                 pass
         if matched_id:
-            result[rec.source_url] = (matched_id, 1.0)
+            result[rec.source_url] = (matched_id, 1.0, "other")
         else:
             unmatched.append(rec)
 
@@ -146,17 +152,15 @@ def extract_ip_batch(
         try:
             extractions = _call_gateway(titles, gateway_url)
         except Exception:
-            # Gateway が落ちていても pipeline を止めない
             for rec in batch:
-                result[rec.source_url] = (None, 0.0)
+                result[rec.source_url] = (None, 0.0, "other")
             continue
 
         for rec, ext in zip(batch, extractions):
             if ext.ip_name:
-                # ip_registry に candidate として upsert
                 ip_id = ip_repo.upsert(ext.ip_name, status="candidate")
-                result[rec.source_url] = (ip_id, ext.confidence)
+                result[rec.source_url] = (ip_id, ext.confidence, ext.category)
             else:
-                result[rec.source_url] = (None, 0.0)
+                result[rec.source_url] = (None, 0.0, ext.category)
 
     return result
