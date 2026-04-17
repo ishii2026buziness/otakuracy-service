@@ -253,7 +253,7 @@ class EventRepo:
         }
         self.conn.execute(
             """
-            INSERT OR IGNORE INTO event
+            INSERT INTO event
                 (event_id, title, summary, category, status, start_at, end_at, tz,
                  venue_id, area_code, is_online, official_url, primary_ticket_url,
                  hero_image_url, price_min, price_max, currency, ticketing_type,
@@ -263,6 +263,9 @@ class EventRepo:
                  :venue_id, :area_code, :is_online, :official_url, :primary_ticket_url,
                  :hero_image_url, :price_min, :price_max, :currency, :ticketing_type,
                  :source_confidence, :first_seen_at, :last_seen_at)
+            ON CONFLICT(event_id) DO UPDATE SET
+                category = excluded.category,
+                last_seen_at = excluded.last_seen_at
             """,
             row,
         )
