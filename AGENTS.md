@@ -79,6 +79,10 @@ git submodule update --remote infra
 - `docs/contracts.md` — **実装時に必ず確認すること**。強制する契約と独自でよい部分を定義。
 - `docs/architecture.md` — このテンプレートの設計意図と決定理由。
 
+## otakuracy 固有ルール
+
+- `docs/adr/0012-k8s-job-naming-and-suite-structure.md` — **新しいジョブを追加するときは必ず読むこと**。k8s命名規約・Pythonスイート構造・CLI命名の決定。
+
 将来のエージェントが必要とする知識（設計決定の理由、契約、運用ルール等）は`docs/`以下に書いてAGENTS.mdから参照せよ。一時的な作業メモや実装詳細は残さない。
 
 ## Service Manifest
