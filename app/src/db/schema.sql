@@ -131,6 +131,13 @@ CREATE TABLE IF NOT EXISTS event_tweet_link (
 CREATE INDEX IF NOT EXISTS idx_etl_event_id ON event_tweet_link (event_id);
 CREATE INDEX IF NOT EXISTS idx_etl_tweet_id ON event_tweet_link (tweet_id);
 
+-- 検索済み記録（0件でも登録して再検索を防ぐ）
+CREATE TABLE IF NOT EXISTS tweet_search_log (
+    event_id    TEXT PRIMARY KEY,
+    searched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    tweet_count INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS event_keywords (
     event_id  TEXT NOT NULL,
     keyword   TEXT NOT NULL,

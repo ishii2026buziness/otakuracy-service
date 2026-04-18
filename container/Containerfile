@@ -4,6 +4,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# twitter-cli: Xフレーズ検索ツール（tweet corpus収集用）
+RUN pip install --no-cache-dir twitter-cli
+
 COPY app /app
 COPY common /common
 
