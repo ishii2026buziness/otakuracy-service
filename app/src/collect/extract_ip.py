@@ -118,25 +118,12 @@ def extract_ip_batch(
     result: dict[str, tuple[str | None, float, str]] = {}
     unmatched: list = []
 
-    # 1. 文字列マッチ（ip_registry の既存エントリ）
-    all_ips = ip_repo.conn.execute(
-        "SELECT ip_id, display_name, aliases FROM ip_registry"
-    ).fetchall()
+    # 1. 文字列マッチ（ip_registry + ip_alias）
+    from collect.ip_link.searcher import IpSearcher
+    searcher = IpSearcher(ip_repo.conn)
 
     for rec in records:
-        matched_id = None
-        title_lower = rec.raw_title.lower()
-        for row in all_ips:
-            if row["display_name"].lower() in title_lower:
-                matched_id = row["ip_id"]
-                break
-            try:
-                aliases = json.loads(row["aliases"] or "[]")
-                if any(a.lower() in title_lower for a in aliases):
-                    matched_id = row["ip_id"]
-                    break
-            except Exception:
-                pass
+        matched_id = searcher.search(rec.raw_title or "")
         if matched_id:
             result[rec.source_url] = (matched_id, 1.0, "other")
         else:

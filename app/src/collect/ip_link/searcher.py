@@ -14,9 +14,10 @@ SELECT ip_id FROM (
     FROM ip_registry
     WHERE length(display_name) >= 3 AND status != 'blocked'
     UNION ALL
-    SELECT ir.ip_id, je.value AS name
-    FROM ip_registry ir, json_each(ir.aliases) je
-    WHERE length(je.value) >= 3 AND ir.status != 'blocked'
+    SELECT a.ip_id, a.alias AS name
+    FROM ip_alias a
+    JOIN ip_registry r ON r.ip_id = a.ip_id
+    WHERE length(a.alias) >= 3 AND r.status != 'blocked'
 )
 WHERE instr(:title, name) > 0
 ORDER BY length(name) DESC

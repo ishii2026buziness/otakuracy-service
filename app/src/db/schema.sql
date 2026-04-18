@@ -9,10 +9,18 @@ CREATE TABLE IF NOT EXISTS ip_registry (
     activation_score REAL DEFAULT 0.0,
     last_event_seen_at TEXT,        -- ISO8601
     last_verified_at TEXT,
-    aliases         TEXT DEFAULT '[]',        -- JSON array
     domain_tags     TEXT DEFAULT '[]',        -- JSON array: anime/manga/vtuber/game
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS ip_alias (
+    alias_id  INTEGER PRIMARY KEY,
+    ip_id     TEXT NOT NULL REFERENCES ip_registry(ip_id) ON DELETE CASCADE,
+    alias     TEXT NOT NULL,
+    lang      TEXT,    -- 'ja' / 'en' / null
+    source    TEXT,    -- 'manami' / 'agent' / 'user'
+    UNIQUE(ip_id, alias)
 );
 
 CREATE TABLE IF NOT EXISTS event (
@@ -102,6 +110,10 @@ CREATE INDEX IF NOT EXISTS idx_eil_event_id ON event_ip_link (event_id);
 -- Indexes for ip_registry
 CREATE INDEX IF NOT EXISTS idx_ip_status       ON ip_registry (status);
 CREATE INDEX IF NOT EXISTS idx_ip_display_name ON ip_registry (display_name);
+
+-- Indexes for ip_alias
+CREATE INDEX IF NOT EXISTS idx_ip_alias_ip_id ON ip_alias (ip_id);
+CREATE INDEX IF NOT EXISTS idx_ip_alias_alias  ON ip_alias (alias);
 
 -- unresolvable: 検索済みだが特定不能なイベントのリンク先（event_ip_link.ip_id = 'unresolvable'）
 INSERT OR IGNORE INTO ip_registry (ip_id, display_name, status, created_at, updated_at)

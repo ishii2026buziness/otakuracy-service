@@ -64,7 +64,7 @@ def _domain_tags(entry_type: str) -> list[str]:
 
 
 def populate(db_path: Path, force_refresh: bool = False, dry_run: bool = False) -> int:
-    from db.repository import IpRegistryRepo, get_connection, init_db
+    from db.repository import IpAliasRepo, IpRegistryRepo, get_connection, init_db
 
     entries = _fetch(force_refresh)
     print(f"[manami] {len(entries)} entries loaded", flush=True)
@@ -79,6 +79,7 @@ def populate(db_path: Path, force_refresh: bool = False, dry_run: bool = False) 
     init_db(db_path)
     conn = get_connection(db_path)
     repo = IpRegistryRepo(conn)
+    alias_repo = IpAliasRepo(conn)
 
     upserted = 0
     for e in entries:
@@ -88,15 +89,17 @@ def populate(db_path: Path, force_refresh: bool = False, dry_run: bool = False) 
         synonyms = [s for s in e.get("synonyms", []) if s]
         display_name, aliases = _ja_title(raw_title, synonyms)
         domain_tags = _domain_tags(e.get("type", ""))
-        repo.upsert(
+        ip_id = repo.upsert(
             display_name=display_name,
-            aliases=json.dumps(aliases, ensure_ascii=False),
             domain_tags=json.dumps(domain_tags, ensure_ascii=False),
         )
+        alias_repo.set_aliases(ip_id, aliases, source="manami")
         upserted += 1
         if upserted % 5000 == 0:
+            conn.commit()
             print(f"[manami] {upserted}/{len(entries)} ...", flush=True)
 
+    conn.commit()
     conn.close()
     print(f"[manami] done: {upserted} upserted", flush=True)
     return 0

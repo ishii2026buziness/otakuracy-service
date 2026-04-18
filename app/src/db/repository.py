@@ -54,6 +54,36 @@ def init_db(db_path: Path = DB_PATH_DEFAULT) -> None:
     conn.close()
 
 
+class IpAliasRepo:
+    """CRUD for ip_alias table."""
+
+    def __init__(self, conn: sqlite3.Connection):
+        self.conn = conn
+
+    def set_aliases(self, ip_id: str, aliases: list[str], source: str) -> None:
+        """指定 source の aliases を洗い替えする。"""
+        self.conn.execute(
+            "DELETE FROM ip_alias WHERE ip_id = ? AND source = ?",
+            (ip_id, source),
+        )
+        self.conn.executemany(
+            "INSERT OR IGNORE INTO ip_alias (ip_id, alias, source) VALUES (?, ?, ?)",
+            [(ip_id, a, source) for a in aliases if a],
+        )
+
+    def add(self, ip_id: str, alias: str, source: str, lang: str | None = None) -> None:
+        self.conn.execute(
+            "INSERT OR IGNORE INTO ip_alias (ip_id, alias, lang, source) VALUES (?, ?, ?, ?)",
+            (ip_id, alias, lang, source),
+        )
+
+    def list_for_ip(self, ip_id: str) -> list[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT * FROM ip_alias WHERE ip_id = ? ORDER BY alias",
+            (ip_id,),
+        ).fetchall()
+
+
 class IpRegistryRepo:
     """CRUD for ip_registry table."""
 
@@ -67,10 +97,9 @@ class IpRegistryRepo:
         existing = self.get_by_name(display_name)
         if existing is not None:
             ip_id = existing["ip_id"]
-            # Build SET clause from kwargs, always update updated_at
             allowed = {
                 "official_url", "status", "activation_score",
-                "last_event_seen_at", "last_verified_at", "aliases", "domain_tags",
+                "last_event_seen_at", "last_verified_at", "domain_tags",
             }
             updates = {k: v for k, v in kwargs.items() if k in allowed}
             updates["updated_at"] = now
@@ -83,7 +112,6 @@ class IpRegistryRepo:
             self.conn.commit()
             return ip_id
 
-        # Insert new record
         ip_id = str(uuid.uuid4())
         row = {
             "ip_id": ip_id,
@@ -93,7 +121,6 @@ class IpRegistryRepo:
             "activation_score": kwargs.get("activation_score", 0.0),
             "last_event_seen_at": kwargs.get("last_event_seen_at"),
             "last_verified_at": kwargs.get("last_verified_at"),
-            "aliases": _json_field(kwargs.get("aliases", "[]")),
             "domain_tags": _json_field(kwargs.get("domain_tags", "[]")),
             "created_at": now,
             "updated_at": now,
@@ -102,11 +129,11 @@ class IpRegistryRepo:
             """
             INSERT INTO ip_registry
                 (ip_id, display_name, official_url, status, activation_score,
-                 last_event_seen_at, last_verified_at, aliases, domain_tags,
+                 last_event_seen_at, last_verified_at, domain_tags,
                  created_at, updated_at)
             VALUES
                 (:ip_id, :display_name, :official_url, :status, :activation_score,
-                 :last_event_seen_at, :last_verified_at, :aliases, :domain_tags,
+                 :last_event_seen_at, :last_verified_at, :domain_tags,
                  :created_at, :updated_at)
             """,
             row,
