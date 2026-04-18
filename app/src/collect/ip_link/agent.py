@@ -12,7 +12,7 @@ from urllib.request import Request, urlopen
 GATEWAY_URL = os.getenv("CLAUDE_GATEWAY_URL", "http://127.0.0.1:18080")
 GATEWAY_CALLER = "otakuracy"
 MODEL = "claude-haiku-4-5-20251001"
-BATCH_SIZE = 20
+BATCH_SIZE = 5
 
 _PROMPT_TEMPLATE = """以下のイベントタイトルリストを解析し、各イベントが何のIP（知的財産）に関連しているか特定してください。
 
@@ -104,8 +104,8 @@ def run_agent(
         titles = [r["title"] for r in batch]
         try:
             results = _call_gateway(titles)
-        except (URLError, RuntimeError, json.JSONDecodeError) as exc:
-            print(f"[ip-link-agent] gateway error batch {i}: {exc}", flush=True)
+        except Exception as exc:
+            print(f"[ip-link-agent] gateway error batch {i}: {type(exc).__name__}: {exc}", flush=True)
             error += len(batch)
             continue
 
