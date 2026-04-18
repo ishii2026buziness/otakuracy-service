@@ -60,11 +60,11 @@ def _call_gateway(titles: list[str]) -> list[dict]:
         raise RuntimeError(f"Gateway error: {result.get('error_message')}")
 
     output = result["output_text"].strip()
-    if output.startswith("```"):
-        output = output.split("```")[1]
-        if output.startswith("json"):
-            output = output[4:]
-        output = output.strip()
+    # Claudeが前置き文を書いてからJSONブロックを返す場合に対応
+    start = output.find("[")
+    end = output.rfind("]") + 1
+    if start != -1 and end > start:
+        output = output[start:end]
     return json.loads(output)
 
 
