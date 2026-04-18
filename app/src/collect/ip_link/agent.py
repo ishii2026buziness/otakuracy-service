@@ -23,6 +23,8 @@ ip_nameをnullにすべきケース:
 - 特定のIPに紐付かない一般イベント（例: 抽象的なコスプレイベント、同人即売会全般）
 - 小規模・無名のコンテンツで確信が持てない場合（誤検出より未検出を優先）
 
+不明なタイトルはagent-browser等のツールでWeb検索して確認してください。
+
 domain_tagsの値: anime / manga / game / vtuber / idol / voice_actor / stage / other
 
 タイトルリスト:
@@ -53,7 +55,7 @@ def _call_gateway(titles: list[str]) -> list[dict]:
         method="POST",
         headers={"Content-Type": "application/json"},
     )
-    with urlopen(req, timeout=60) as resp:
+    with urlopen(req, timeout=300) as resp:
         result = json.loads(resp.read().decode("utf-8"))
 
     if not result.get("success"):
