@@ -117,6 +117,15 @@ CREATE INDEX IF NOT EXISTS idx_ip_display_name ON ip_registry (display_name);
 CREATE INDEX IF NOT EXISTS idx_ip_alias_ip_id ON ip_alias (ip_id);
 CREATE INDEX IF NOT EXISTS idx_ip_alias_alias  ON ip_alias (alias);
 
+CREATE TABLE IF NOT EXISTS event_keywords (
+    event_id  TEXT NOT NULL,
+    keyword   TEXT NOT NULL,
+    weight    REAL NOT NULL DEFAULT 1.0,  -- iteration decay: round1=1.0, round2=0.7, round3=0.5
+    PRIMARY KEY (event_id, keyword)
+);
+CREATE INDEX IF NOT EXISTS idx_ek_keyword  ON event_keywords (keyword);
+CREATE INDEX IF NOT EXISTS idx_ek_event_id ON event_keywords (event_id);
+
 -- unresolvable: 検索済みだが特定不能なイベントのリンク先（event_ip_link.ip_id = 'unresolvable'）
 INSERT OR IGNORE INTO ip_registry (ip_id, display_name, status, created_at, updated_at)
 VALUES ('unresolvable', 'unresolvable', 'blocked', datetime('now'), datetime('now'));
