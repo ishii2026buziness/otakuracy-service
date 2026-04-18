@@ -112,8 +112,13 @@ def run_agent(
         for row, item in zip(batch, results):
             event_id = row["event_id"]
             ip_name = item.get("ip_name")
-            _NG = ("不明", "unknown", "web検索", "検索", "null", "なし", "わからない")
-            if ip_name and not any(w in ip_name.lower() for w in _NG):
+            _NG_EXACT = {"null", "none", "なし", "不明", "unknown"}
+            _NG_START = ("不明 -", "unknown -", "web検索", "わからない")
+            _is_garbage = (
+                ip_name.lower().strip() in _NG_EXACT
+                or any(ip_name.lower().startswith(p) for p in _NG_START)
+            )
+            if ip_name and not _is_garbage:
                 if not dry_run:
                     aliases = item.get("aliases", [])
                     domain_tags = item.get("domain_tags", [])
