@@ -117,6 +117,20 @@ CREATE INDEX IF NOT EXISTS idx_ip_display_name ON ip_registry (display_name);
 CREATE INDEX IF NOT EXISTS idx_ip_alias_ip_id ON ip_alias (ip_id);
 CREATE INDEX IF NOT EXISTS idx_ip_alias_alias  ON ip_alias (alias);
 
+CREATE TABLE IF NOT EXISTS tweets (
+    tweet_id   TEXT PRIMARY KEY,
+    text       TEXT NOT NULL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS event_tweet_link (
+    event_id  TEXT NOT NULL REFERENCES event(event_id),
+    tweet_id  TEXT NOT NULL REFERENCES tweets(tweet_id),
+    PRIMARY KEY (event_id, tweet_id)
+);
+CREATE INDEX IF NOT EXISTS idx_etl_event_id ON event_tweet_link (event_id);
+CREATE INDEX IF NOT EXISTS idx_etl_tweet_id ON event_tweet_link (tweet_id);
+
 CREATE TABLE IF NOT EXISTS event_keywords (
     event_id  TEXT NOT NULL,
     keyword   TEXT NOT NULL,
