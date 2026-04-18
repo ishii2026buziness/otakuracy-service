@@ -35,6 +35,25 @@ def _fetch(force_refresh: bool = False) -> list[dict]:
     return data.get("data", [])
 
 
+def _is_ja(s: str) -> bool:
+    return any('\u3040' <= c <= '\u9fff' for c in s)
+
+
+def _ja_title(title: str, synonyms: list[str]) -> tuple[str, list[str]]:
+    """日本語タイトルを display_name に。なければ元タイトルをそのまま使う。
+    Returns (display_name, aliases)."""
+    candidates = [s for s in synonyms if _is_ja(s)]
+    if candidates:
+        # 漢字を含む候補を優先
+        kanji = [s for s in candidates if any('\u4e00' <= c <= '\u9fff' for c in s)]
+        ja_name = kanji[0] if kanji else candidates[0]
+        aliases = [s for s in [title] + synonyms if s != ja_name]
+    else:
+        ja_name = title
+        aliases = [s for s in synonyms if s != title]
+    return ja_name, aliases
+
+
 def _domain_tags(entry_type: str) -> list[str]:
     t = entry_type.upper()
     if t in _ANIME_TYPES:
@@ -63,14 +82,15 @@ def populate(db_path: Path, force_refresh: bool = False, dry_run: bool = False) 
 
     upserted = 0
     for e in entries:
-        title = e.get("title", "").strip()
-        if not title:
+        raw_title = e.get("title", "").strip()
+        if not raw_title:
             continue
-        synonyms = [s for s in e.get("synonyms", []) if s and s != title]
+        synonyms = [s for s in e.get("synonyms", []) if s]
+        display_name, aliases = _ja_title(raw_title, synonyms)
         domain_tags = _domain_tags(e.get("type", ""))
         repo.upsert(
-            display_name=title,
-            aliases=json.dumps(synonyms, ensure_ascii=False),
+            display_name=display_name,
+            aliases=json.dumps(aliases, ensure_ascii=False),
             domain_tags=json.dumps(domain_tags, ensure_ascii=False),
         )
         upserted += 1

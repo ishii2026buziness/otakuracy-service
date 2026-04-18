@@ -102,3 +102,7 @@ CREATE INDEX IF NOT EXISTS idx_eil_event_id ON event_ip_link (event_id);
 -- Indexes for ip_registry
 CREATE INDEX IF NOT EXISTS idx_ip_status       ON ip_registry (status);
 CREATE INDEX IF NOT EXISTS idx_ip_display_name ON ip_registry (display_name);
+
+-- unresolvable: 検索済みだが特定不能なイベントのリンク先（event_ip_link.ip_id = 'unresolvable'）
+INSERT OR IGNORE INTO ip_registry (ip_id, display_name, status, created_at, updated_at)
+VALUES ('unresolvable', 'unresolvable', 'blocked', datetime('now'), datetime('now'));
