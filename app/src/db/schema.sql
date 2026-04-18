@@ -2,16 +2,18 @@
 -- Use: sqlite3 /data/otakuracy.db < schema.sql
 
 CREATE TABLE IF NOT EXISTS ip_registry (
-    ip_id           TEXT PRIMARY KEY,
-    display_name    TEXT NOT NULL,
-    official_url    TEXT,
-    status          TEXT NOT NULL DEFAULT 'candidate',  -- candidate/active/cooling/inactive/blocked
-    activation_score REAL DEFAULT 0.0,
+    ip_id             TEXT PRIMARY KEY,
+    display_name      TEXT NOT NULL,
+    official_url      TEXT,
+    status            TEXT NOT NULL DEFAULT 'candidate',  -- candidate/active/cooling/inactive/blocked
+    activation_score  REAL DEFAULT 0.0,
     last_event_seen_at TEXT,        -- ISO8601
-    last_verified_at TEXT,
-    domain_tags     TEXT DEFAULT '[]',        -- JSON array: anime/manga/vtuber/game
-    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    last_verified_at  TEXT,
+    domain_tags       TEXT DEFAULT '[]',        -- JSON array: anime/manga/vtuber/game
+    canonical_source  TEXT,         -- 'anilist' / 'holodex' / null (ADR-0011)
+    canonical_id      TEXT,         -- source-specific ID (e.g. AniList media.id)
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS ip_alias (

@@ -45,11 +45,25 @@ def get_connection(db_path: Path = DB_PATH_DEFAULT) -> sqlite3.Connection:
     return conn
 
 
+def _migrate_db(conn: sqlite3.Connection) -> None:
+    """Add columns that were introduced after the initial schema."""
+    for col, typedef in [
+        ("canonical_source", "TEXT"),
+        ("canonical_id", "TEXT"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE ip_registry ADD COLUMN {col} {typedef}")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # column already exists
+
+
 def init_db(db_path: Path = DB_PATH_DEFAULT) -> None:
     """Initialize the database schema."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = get_connection(db_path)
     conn.executescript(SCHEMA_PATH.read_text())
+    _migrate_db(conn)
     conn.commit()
     conn.close()
 
@@ -100,6 +114,7 @@ class IpRegistryRepo:
             allowed = {
                 "official_url", "status", "activation_score",
                 "last_event_seen_at", "last_verified_at", "domain_tags",
+                "canonical_source", "canonical_id",
             }
             updates = {k: v for k, v in kwargs.items() if k in allowed}
             updates["updated_at"] = now
@@ -122,6 +137,8 @@ class IpRegistryRepo:
             "last_event_seen_at": kwargs.get("last_event_seen_at"),
             "last_verified_at": kwargs.get("last_verified_at"),
             "domain_tags": _json_field(kwargs.get("domain_tags", "[]")),
+            "canonical_source": kwargs.get("canonical_source"),
+            "canonical_id": kwargs.get("canonical_id"),
             "created_at": now,
             "updated_at": now,
         }
@@ -130,10 +147,12 @@ class IpRegistryRepo:
             INSERT INTO ip_registry
                 (ip_id, display_name, official_url, status, activation_score,
                  last_event_seen_at, last_verified_at, domain_tags,
+                 canonical_source, canonical_id,
                  created_at, updated_at)
             VALUES
                 (:ip_id, :display_name, :official_url, :status, :activation_score,
                  :last_event_seen_at, :last_verified_at, :domain_tags,
+                 :canonical_source, :canonical_id,
                  :created_at, :updated_at)
             """,
             row,
