@@ -8,6 +8,19 @@ import sqlite3
 import subprocess
 import time
 
+# スクレイピング元HTMLに混入しがちな特殊文字 → twitter-cli クォート破壊防止
+_QUERY_TRANS = str.maketrans({
+    '\xa0': ' ',    # NO-BREAK SPACE
+    '‘': "'",  # LEFT SINGLE QUOTATION MARK
+    '’': "'",  # RIGHT SINGLE QUOTATION MARK
+    '“': '',   # LEFT DOUBLE QUOTATION MARK（クォート境界破壊のため除去）
+    '”': '',   # RIGHT DOUBLE QUOTATION MARK
+})
+
+
+def _normalize_title(title: str) -> str:
+    return title.translate(_QUERY_TRANS).strip()
+
 
 def _twitter_search(query: str, max_count: int = 30) -> list[dict]:
     """完全一致フレーズ検索。tweet_id と text を返す。"""
@@ -59,7 +72,7 @@ def collect_tweets(
 
     for row in rows:
         event_id, title = row["event_id"], row["title"]
-        tweets = _twitter_search(title, max_count=max_per_event)
+        tweets = _twitter_search(_normalize_title(title), max_count=max_per_event)
 
         if not dry_run:
             for t in tweets:
