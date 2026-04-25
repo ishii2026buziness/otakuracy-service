@@ -97,6 +97,7 @@ def extract_keywords(
         batch = rows[i : i + BATCH_SIZE]
 
         events_payload = []
+        tweets_by_event: dict[str, list[str]] = {}
         for row in batch:
             tweets = [
                 r[0]
@@ -112,6 +113,7 @@ def extract_keywords(
             ]
             if not tweets:
                 continue
+            tweets_by_event[row["event_id"]] = tweets
             events_payload.append({"event_id": row["event_id"], "tweets": tweets})
 
         if not events_payload:
@@ -129,11 +131,15 @@ def extract_keywords(
             keywords = item.get("keywords", [])
             if not event_id or not keywords:
                 continue
+            tweets = tweets_by_event.get(event_id, [])
             if not dry_run:
                 for kw in keywords:
+                    keyword = kw["keyword"]
+                    # TF = そのキーワードが含まれるツイート数 / 総ツイート数
+                    tf = sum(1 for t in tweets if keyword.lower() in t.lower()) / len(tweets) if tweets else 0.0
                     conn.execute(
                         "INSERT OR REPLACE INTO event_keywords (event_id, keyword, weight) VALUES (?, ?, ?)",
-                        (event_id, kw["keyword"], kw.get("weight", 0.5)),
+                        (event_id, keyword, tf),
                     )
                 conn.commit()
             inserted += len(keywords)
