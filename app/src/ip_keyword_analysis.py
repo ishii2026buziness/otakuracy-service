@@ -49,6 +49,7 @@ def load_data(conn: sqlite3.Connection, min_tf: float = 0.0):
             continue
         # 表記ゆれ正規化
         keyword = aliases.get(keyword, keyword)
+        event_kws[event_id][keyword] = max(event_kws[event_id].get(keyword, 0.0), weight)
         event_titles[event_id] = title
         kw_events[keyword].add(event_id)
 
