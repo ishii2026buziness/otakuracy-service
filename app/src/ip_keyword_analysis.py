@@ -4,6 +4,7 @@ IP同定のための keyword 分析スクリプト。
 
 Usage:
     python ip_keyword_analysis.py [--method all|tfidf|pmi|bm25|graph] [--top N] [--db PATH]
+    python ip_keyword_analysis.py --method graph --min-tf 0.1  # ノイズ除去 + 正規化適用
 """
 import math
 import argparse
@@ -11,8 +12,25 @@ import sqlite3
 from collections import defaultdict
 
 
-def load_data(conn: sqlite3.Connection):
-    """event_keywords と event テーブルからデータ読み込み。"""
+def _load_aliases(conn: sqlite3.Connection) -> dict[str, str]:
+    """keyword_alias テーブルがあれば alias→canonical マッピングを返す。"""
+    try:
+        rows = conn.execute("SELECT alias, canonical FROM keyword_alias").fetchall()
+        return {alias: canonical for alias, canonical in rows}
+    except sqlite3.OperationalError:
+        return {}
+
+
+def load_data(conn: sqlite3.Connection, min_tf: float = 0.0):
+    """event_keywords と event テーブルからデータ読み込み。
+
+    min_tf: この値未満の weight(TF) を持つキーワードを除外する。
+            ノイズ（ファジーな言及）を弾くのに使う。
+    """
+    aliases = _load_aliases(conn)
+    if aliases:
+        print(f"  [load] keyword_alias: {len(aliases)} entries applied", flush=True)
+
     rows = conn.execute(
         "SELECT ek.event_id, e.title, ek.keyword, ek.weight "
         "FROM event_keywords ek "
@@ -27,7 +45,10 @@ def load_data(conn: sqlite3.Connection):
     kw_events: dict[str, set[str]] = defaultdict(set)
 
     for event_id, title, keyword, weight in rows:
-        event_kws[event_id][keyword] = weight
+        if weight < min_tf:
+            continue
+        # 表記ゆれ正規化
+        keyword = aliases.get(keyword, keyword)
         event_titles[event_id] = title
         kw_events[keyword].add(event_id)
 
@@ -233,10 +254,12 @@ def main():
     parser.add_argument("--top", type=int, default=5)
     parser.add_argument("--db", default="/srv/otakuracy/data/otakuracy.db")
     parser.add_argument("--threshold", type=float, default=0.3, help="graph clustering cosine threshold")
+    parser.add_argument("--min-tf", type=float, default=0.0, dest="min_tf",
+                        help="TFがこの値未満のキーワードを除外（ノイズ抑制）")
     args = parser.parse_args()
 
     conn = sqlite3.connect(args.db)
-    event_kws, event_titles, kw_events, tweet_counts = load_data(conn)
+    event_kws, event_titles, kw_events, tweet_counts = load_data(conn, min_tf=args.min_tf)
 
     total_events = len(event_kws)
     total_kws = sum(len(v) for v in event_kws.values())
