@@ -314,5 +314,18 @@ function toggleFollowBtn(btn) {
   btn.classList.toggle('following', following);
   renderChipBar();
 }
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.tag-pop-wrap').forEach(wrap => {
+    let t;
+    const pop = wrap.querySelector('.tag-popover');
+    if (!pop) return;
+    const show = () => { clearTimeout(t); pop.style.display = 'block'; };
+    const hide = () => { t = setTimeout(() => { pop.style.display = 'none'; }, 200); };
+    wrap.addEventListener('mouseenter', show);
+    wrap.addEventListener('mouseleave', hide);
+    pop.addEventListener('mouseenter', show);
+    pop.addEventListener('mouseleave', hide);
+  });
+});
 </script>
 {% endblock %}
