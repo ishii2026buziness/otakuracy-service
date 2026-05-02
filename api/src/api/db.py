@@ -7,7 +7,6 @@ DB_PATH = Path("/data/otakuracy.db")
 
 
 def get_conn() -> sqlite3.Connection:
-    # immutable=1 avoids WAL shm file creation (required for read-only hostPath)
     conn = sqlite3.connect(f"file:{DB_PATH}?immutable=1", uri=True)
     conn.row_factory = sqlite3.Row
     return conn
@@ -27,8 +26,12 @@ def rows_to_dicts(rows: list[sqlite3.Row]) -> list[dict]:
 # Events
 # ---------------------------------------------------------------------------
 
-# Dedup CTE: 同タイトル×同会場の重複行をまとめ、1行に絞る。
-# 優先順位: キーワード抽出済み > 画像あり > 最初に収集した行
+# Dedup CTE:
+#   - 同タイトル×同会場を1グループとして代表行を1件に絞る
+#   - group_start: グループ内の最小 start_at
+#   - group_end:   グループ内の MAX(end_at or start_at) → end_atがNULLでも期間が出る
+#   - ソートキー:  COALESCE(group_end, group_start) DESC
+#     → まだ開催中のイベント（last scrape が最近）が上位、終了済みが下位
 _DEDUP_CTE = """
 WITH deduped AS (
     SELECT e.*,
@@ -38,25 +41,21 @@ WITH deduped AS (
                 (ek.event_id IS NOT NULL) DESC,
                 (e.hero_image_url IS NOT NULL) DESC,
                 e.first_seen_at ASC
-        ) AS rn
+        ) AS rn,
+        MIN(e.start_at) OVER (
+            PARTITION BY e.title, COALESCE(e.venue_id, '')
+        ) AS group_start,
+        MAX(COALESCE(e.end_at, e.start_at)) OVER (
+            PARTITION BY e.title, COALESCE(e.venue_id, '')
+        ) AS group_end
     FROM event e
     LEFT JOIN (SELECT DISTINCT event_id FROM event_keywords) ek
         ON e.event_id = ek.event_id
 )
 """
 
-# ソート: 開催予定イベント（start_at >= 今日）を先頭に近い順、
-# 過去イベントはその後に新しい順。日付なしは末尾。
-_ORDER_SQL = """
-ORDER BY
-    CASE
-        WHEN start_at IS NULL THEN 2
-        WHEN start_at >= DATE('now') THEN 0
-        ELSE 1
-    END,
-    CASE WHEN start_at >= DATE('now') THEN start_at END ASC,
-    start_at DESC
-"""
+# 後の日程（group_end が未来 or 最近）ほど上位
+_ORDER_SQL = "ORDER BY COALESCE(group_end, group_start) DESC NULLS LAST"
 
 
 def search_events(
@@ -65,7 +64,6 @@ def search_events(
     page: int = 1,
     limit: int = 24,
 ) -> tuple[list[dict[str, Any]], int]:
-    """Full-text + tag search with dedup. Returns (items, total)."""
     conn = get_conn()
     params: list[Any] = []
     filter_clauses: list[str] = ["d.rn = 1"]
@@ -76,7 +74,7 @@ def search_events(
         params += [like, like]
 
     if tag:
-        # タグ検索: 同グループ内のどれかがキーワードを持っていればOK
+        # グループ内のどれかがキーワードを持っていればヒット
         filter_clauses.append(
             """(d.title, COALESCE(d.venue_id, '')) IN (
                 SELECT e2.title, COALESCE(e2.venue_id, '')
@@ -102,8 +100,10 @@ def search_events(
     offset = (page - 1) * limit
     data_sql = f"""
         SELECT
-            event_id, title, summary, start_at, end_at, area_code,
-            official_url, primary_ticket_url, hero_image_url,
+            event_id, title, summary,
+            group_start AS start_at,
+            group_end   AS end_at,
+            area_code, official_url, primary_ticket_url, hero_image_url,
             price_min, price_max, status, is_online, venue_name
         FROM ({base_sql})
         {_ORDER_SQL}
@@ -116,24 +116,37 @@ def search_events(
 
 def get_event(event_id: str) -> dict | None:
     conn = get_conn()
+    # 代表行 + グループ全体の日付範囲
     row = conn.execute(
         """
         SELECT
             e.*,
             v.name AS venue_name,
-            v.area_code AS venue_area_code
+            v.area_code AS venue_area_code,
+            MIN(e2.start_at) OVER () AS group_start,
+            MAX(COALESCE(e2.end_at, e2.start_at)) OVER () AS group_end
         FROM event e
         LEFT JOIN venue v ON e.venue_id = v.venue_id
+        JOIN (
+            SELECT start_at, end_at FROM event
+            WHERE title = (SELECT title FROM event WHERE event_id = ?)
+              AND COALESCE(venue_id, '') = COALESCE(
+                    (SELECT venue_id FROM event WHERE event_id = ?), '')
+        ) e2 ON 1=1
         WHERE e.event_id = ?
+        LIMIT 1
         """,
-        (event_id,),
+        (event_id, event_id, event_id),
     ).fetchone()
     if row is None:
         conn.close()
         return None
     result = dict(row)
+    # group_start/group_end を start_at/end_at として上書き
+    result["start_at"] = result.pop("group_start", result["start_at"])
+    result["end_at"]   = result.pop("group_end",  result["end_at"])
 
-    # keywords: このevent_idに加え、同タイトル×同会場グループ全体のキーワードを集約
+    # グループ全体のキーワードを集約
     kw_rows = conn.execute(
         """
         SELECT ek.keyword, MAX(ek.weight) AS weight
@@ -149,7 +162,6 @@ def get_event(event_id: str) -> dict | None:
     ).fetchall()
     result["keywords"] = [dict(r) for r in kw_rows]
 
-    # linked IPs
     ip_rows = conn.execute(
         """
         SELECT ir.display_name, eil.confidence
@@ -171,7 +183,6 @@ def get_event(event_id: str) -> dict | None:
 # ---------------------------------------------------------------------------
 
 def list_tags(q: str = "", limit: int = 50) -> list[dict]:
-    # deduped イベント数でカウント（重複行を除外）
     conn = get_conn()
     params: list[Any] = []
     kw_where = ""
