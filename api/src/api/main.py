@@ -55,6 +55,13 @@ templates.env.filters["format_date"] = _format_date
 templates.env.filters["format_price"] = _format_price
 
 
+def _format_time(val) -> str:
+    return val if val else "−"
+
+
+templates.env.filters["format_time"] = _format_time
+
+
 # ---------------------------------------------------------------------------
 # REST API endpoints
 # ---------------------------------------------------------------------------

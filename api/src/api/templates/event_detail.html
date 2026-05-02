@@ -161,6 +161,12 @@
               {% endif %}
             </span>
           </div>
+          {% if event.start_time or event.end_time %}
+          <div class="detail-info-row">
+            <span class="detail-info-label">⏰ 開演</span>
+            <span class="detail-info-value">開始 {{ event.start_time | format_time }} / 終了 {{ event.end_time | format_time }}</span>
+          </div>
+          {% endif %}
           {% if event.venue_name %}
           <div class="detail-info-row">
             <span class="detail-info-label">📍 会場</span>

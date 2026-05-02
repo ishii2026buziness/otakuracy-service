@@ -117,6 +117,7 @@ def search_events(
             event_id, title, summary,
             group_start AS start_at,
             group_end   AS end_at,
+            start_time, end_time,
             area_code, official_url, primary_ticket_url, hero_image_url,
             price_min, price_max, status, is_online, venue_name
         FROM ({base_sql})

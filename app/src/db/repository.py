@@ -19,6 +19,16 @@ def _parse_date(raw_date_text: str | None) -> str | None:
     return f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
 
 
+
+def _parse_time(raw_body: str | None) -> str | None:
+    """Extract start time from raw_body like '開演：18:00～'. Returns 'HH:MM' or None."""
+    if not raw_body:
+        return None
+    m = re.search(r'(?:開演|開始)[:：](\d{1,2}:\d{2})', raw_body)
+    if not m:
+        return None
+    return m.group(1)
+
 def _make_event_id(title: str, start_date: str | None) -> str:
     """Deterministic event_id from title + start_date to prevent duplicate inserts."""
     key = f"{title}|{start_date or ''}"
@@ -272,6 +282,8 @@ class EventRepo:
         """Insert event if not exists (idempotent). Returns event_id."""
         title = record["title"]
         start_at = record.get("start_at") or _parse_date(record.get("raw_date_text"))
+        start_time = record.get("start_time") or _parse_time(record.get("raw_body"))
+        end_time = record.get("end_time")
         event_id = _make_event_id(title, start_at)
         now = datetime.now(timezone.utc).isoformat()
         row = {
@@ -282,6 +294,8 @@ class EventRepo:
             "status": record.get("status", "announced"),
             "start_at": start_at,
             "end_at": record.get("end_at"),
+            "start_time": start_time,
+            "end_time": end_time,
             "tz": record.get("tz", "Asia/Tokyo"),
             "venue_id": record.get("venue_id"),
             "area_code": record.get("area_code"),
@@ -303,15 +317,19 @@ class EventRepo:
                 (event_id, title, summary, category, status, start_at, end_at, tz,
                  venue_id, area_code, is_online, official_url, primary_ticket_url,
                  hero_image_url, price_min, price_max, currency, ticketing_type,
-                 source_confidence, first_seen_at, last_seen_at)
+                 source_confidence, first_seen_at, last_seen_at,
+                 start_time, end_time)
             VALUES
                 (:event_id, :title, :summary, :category, :status, :start_at, :end_at, :tz,
                  :venue_id, :area_code, :is_online, :official_url, :primary_ticket_url,
                  :hero_image_url, :price_min, :price_max, :currency, :ticketing_type,
-                 :source_confidence, :first_seen_at, :last_seen_at)
+                 :source_confidence, :first_seen_at, :last_seen_at,
+                 :start_time, :end_time)
             ON CONFLICT(event_id) DO UPDATE SET
                 category = excluded.category,
-                last_seen_at = excluded.last_seen_at
+                last_seen_at = excluded.last_seen_at,
+                start_time = COALESCE(event.start_time, excluded.start_time),
+                end_time = COALESCE(event.end_time, excluded.end_time)
             """,
             row,
         )
