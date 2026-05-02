@@ -27,60 +27,86 @@ def rows_to_dicts(rows: list[sqlite3.Row]) -> list[dict]:
 # Events
 # ---------------------------------------------------------------------------
 
+# Dedup CTE: 同タイトル×同会場の重複行をまとめ、1行に絞る。
+# 優先順位: キーワード抽出済み > 画像あり > 最初に収集した行
+_DEDUP_CTE = """
+WITH deduped AS (
+    SELECT e.*,
+        ROW_NUMBER() OVER (
+            PARTITION BY e.title, COALESCE(e.venue_id, '')
+            ORDER BY
+                (ek.event_id IS NOT NULL) DESC,
+                (e.hero_image_url IS NOT NULL) DESC,
+                e.first_seen_at ASC
+        ) AS rn
+    FROM event e
+    LEFT JOIN (SELECT DISTINCT event_id FROM event_keywords) ek
+        ON e.event_id = ek.event_id
+)
+"""
+
+# ソート: 開催予定イベント（start_at >= 今日）を先頭に近い順、
+# 過去イベントはその後に新しい順。日付なしは末尾。
+_ORDER_SQL = """
+ORDER BY
+    CASE
+        WHEN start_at IS NULL THEN 2
+        WHEN start_at >= DATE('now') THEN 0
+        ELSE 1
+    END,
+    CASE WHEN start_at >= DATE('now') THEN start_at END ASC,
+    start_at DESC
+"""
+
+
 def search_events(
     q: str = "",
     tag: str = "",
     page: int = 1,
     limit: int = 24,
 ) -> tuple[list[dict[str, Any]], int]:
-    """Full-text + tag search. Returns (items, total)."""
+    """Full-text + tag search with dedup. Returns (items, total)."""
     conn = get_conn()
     params: list[Any] = []
-    where_clauses: list[str] = []
+    filter_clauses: list[str] = ["d.rn = 1"]
 
     if q:
         like = f"%{q}%"
-        where_clauses.append(
-            "(e.title LIKE ? OR e.summary LIKE ?)"
-        )
+        filter_clauses.append("(d.title LIKE ? OR d.summary LIKE ?)")
         params += [like, like]
 
     if tag:
-        where_clauses.append(
-            "e.event_id IN (SELECT event_id FROM event_keywords WHERE keyword = ?)"
+        # タグ検索: 同グループ内のどれかがキーワードを持っていればOK
+        filter_clauses.append(
+            """(d.title, COALESCE(d.venue_id, '')) IN (
+                SELECT e2.title, COALESCE(e2.venue_id, '')
+                FROM event e2
+                JOIN event_keywords ek2 ON e2.event_id = ek2.event_id
+                WHERE ek2.keyword = ?
+            )"""
         )
         params.append(tag)
 
-    where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+    where_sql = "WHERE " + " AND ".join(filter_clauses)
 
-    count_sql = f"""
-        SELECT COUNT(*) FROM event e
-        LEFT JOIN venue v ON e.venue_id = v.venue_id
+    base_sql = f"""
+        {_DEDUP_CTE}
+        SELECT d.*, v.name AS venue_name
+        FROM deduped d
+        LEFT JOIN venue v ON d.venue_id = v.venue_id
         {where_sql}
     """
-    total = conn.execute(count_sql, params).fetchone()[0]
+
+    total = conn.execute(f"SELECT COUNT(*) FROM ({base_sql})", params).fetchone()[0]
 
     offset = (page - 1) * limit
     data_sql = f"""
         SELECT
-            e.event_id,
-            e.title,
-            e.summary,
-            e.start_at,
-            e.end_at,
-            e.area_code,
-            e.official_url,
-            e.primary_ticket_url,
-            e.hero_image_url,
-            e.price_min,
-            e.price_max,
-            e.status,
-            e.is_online,
-            v.name AS venue_name
-        FROM event e
-        LEFT JOIN venue v ON e.venue_id = v.venue_id
-        {where_sql}
-        ORDER BY e.start_at ASC NULLS LAST
+            event_id, title, summary, start_at, end_at, area_code,
+            official_url, primary_ticket_url, hero_image_url,
+            price_min, price_max, status, is_online, venue_name
+        FROM ({base_sql})
+        {_ORDER_SQL}
         LIMIT ? OFFSET ?
     """
     rows = conn.execute(data_sql, params + [limit, offset]).fetchall()
@@ -107,10 +133,19 @@ def get_event(event_id: str) -> dict | None:
         return None
     result = dict(row)
 
-    # keywords
+    # keywords: このevent_idに加え、同タイトル×同会場グループ全体のキーワードを集約
     kw_rows = conn.execute(
-        "SELECT keyword, weight FROM event_keywords WHERE event_id = ? ORDER BY weight DESC",
-        (event_id,),
+        """
+        SELECT ek.keyword, MAX(ek.weight) AS weight
+        FROM event_keywords ek
+        JOIN event e2 ON ek.event_id = e2.event_id
+        WHERE e2.title = (SELECT title FROM event WHERE event_id = ?)
+          AND COALESCE(e2.venue_id, '') = COALESCE(
+                (SELECT venue_id FROM event WHERE event_id = ?), '')
+        GROUP BY ek.keyword
+        ORDER BY weight DESC
+        """,
+        (event_id, event_id),
     ).fetchall()
     result["keywords"] = [dict(r) for r in kw_rows]
 
@@ -136,18 +171,27 @@ def get_event(event_id: str) -> dict | None:
 # ---------------------------------------------------------------------------
 
 def list_tags(q: str = "", limit: int = 50) -> list[dict]:
+    # deduped イベント数でカウント（重複行を除外）
     conn = get_conn()
     params: list[Any] = []
-    where = ""
+    kw_where = ""
     if q:
-        where = "WHERE keyword LIKE ?"
+        kw_where = "AND ek.keyword LIKE ?"
         params.append(f"%{q}%")
     rows = conn.execute(
         f"""
-        SELECT keyword, COUNT(*) AS event_count, SUM(weight) AS total_weight
-        FROM event_keywords
-        {where}
-        GROUP BY keyword
+        WITH deduped_events AS (
+            SELECT MIN(event_id) AS event_id, title, COALESCE(venue_id, '') AS vkey
+            FROM event
+            GROUP BY title, COALESCE(venue_id, '')
+        )
+        SELECT ek.keyword,
+               COUNT(DISTINCT de.event_id) AS event_count,
+               SUM(ek.weight) AS total_weight
+        FROM event_keywords ek
+        JOIN deduped_events de ON ek.event_id = de.event_id
+        WHERE 1=1 {kw_where}
+        GROUP BY ek.keyword
         ORDER BY event_count DESC, total_weight DESC
         LIMIT ?
         """,
