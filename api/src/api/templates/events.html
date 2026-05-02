@@ -1,22 +1,12 @@
+{% extends "base.html" %}
+
 {% block head %}
 <style>
-.sort-btn {
-  font-size: 0.8rem;
-  padding: 0.3rem 0.7rem;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  text-decoration: none;
-  background: var(--surface2);
-  transition: all 0.15s;
-  white-space: nowrap;
-}
-.sort-btn:hover { color: var(--text); border-color: var(--accent); }
-.sort-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.sort-btn { font-size:0.8rem; padding:0.3rem 0.7rem; border-radius:6px; border:1px solid var(--border); color:var(--text-muted); text-decoration:none; background:var(--surface2); transition:all 0.15s; white-space:nowrap; }
+.sort-btn:hover { color:var(--text); border-color:var(--accent); }
+.sort-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
 </style>
 {% endblock %}
-
-{% extends "base.html" %}
 {% block title %}
   {% if tag %}#{{ tag }} のイベント{% elif q %}「{{ q }}」の検索結果{% else %}イベント一覧{% endif %} — otakuracy
 {% endblock %}
