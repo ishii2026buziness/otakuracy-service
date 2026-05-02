@@ -50,29 +50,39 @@ def collect_tweets(
 ) -> dict:
     """未検索イベントのツイートを収集してDBに保存する。
 
+    同一タイトル×会場のグループを1回だけ検索し、グループ内の全event_idに結果を紐付ける。
+    limit はユニークな検索クエリ数（グループ数）の上限。
+
     Returns: {"collected": int, "empty": int, "skipped": int}
     """
+    # 未ログのevent_idを (normalized_title, venue_id) でグループ化して取得
     rows = conn.execute(
         """
-        SELECT event_id, title FROM event
-        WHERE event_id NOT IN (SELECT event_id FROM tweet_search_log)
-        ORDER BY start_at DESC
-        LIMIT ?
+        SELECT e.event_id, e.title, COALESCE(e.venue_id, '') AS vkey
+        FROM event e
+        WHERE e.event_id NOT IN (SELECT event_id FROM tweet_search_log)
+        ORDER BY e.start_at DESC
         """,
-        (limit,),
     ).fetchall()
 
     if not rows:
         print("[tweet-corpus] no uncrawled events", flush=True)
         return {"collected": 0, "empty": 0, "skipped": 0}
 
-    print(f"[tweet-corpus] {len(rows)} events to crawl", flush=True)
-
-    collected = empty = skipped = 0
-
+    # (normalized_title, vkey) → [event_ids] にグループ化
+    groups: dict[tuple[str, str], list[str]] = {}
     for row in rows:
-        event_id, title = row["event_id"], row["title"]
-        tweets = _twitter_search(_normalize_title(title), max_count=max_per_event)
+        key = (_normalize_title(row["title"]), row["vkey"])
+        groups.setdefault(key, []).append(row["event_id"])
+
+    # limit はグループ数の上限
+    group_items = list(groups.items())[:limit]
+    print(f"[tweet-corpus] {len(group_items)} unique queries ({len(rows)} event_ids total)", flush=True)
+
+    collected = empty = 0
+
+    for (norm_title, _vkey), event_ids in group_items:
+        tweets = _twitter_search(norm_title, max_count=max_per_event)
 
         if not dry_run:
             for t in tweets:
@@ -80,23 +90,27 @@ def collect_tweets(
                     "INSERT OR IGNORE INTO tweets (tweet_id, text) VALUES (?, ?)",
                     (t["tweet_id"], t["text"]),
                 )
+            for eid in event_ids:
+                for t in tweets:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO event_tweet_link (event_id, tweet_id) VALUES (?, ?)",
+                        (eid, t["tweet_id"]),
+                    )
                 conn.execute(
-                    "INSERT OR IGNORE INTO event_tweet_link (event_id, tweet_id) VALUES (?, ?)",
-                    (event_id, t["tweet_id"]),
+                    "INSERT OR REPLACE INTO tweet_search_log (event_id, tweet_count) VALUES (?, ?)",
+                    (eid, len(tweets)),
                 )
-            conn.execute(
-                "INSERT OR REPLACE INTO tweet_search_log (event_id, tweet_count) VALUES (?, ?)",
-                (event_id, len(tweets)),
-            )
             conn.commit()
 
+        label = norm_title[:40]
+        n_ids = len(event_ids)
         if tweets:
             collected += 1
-            print(f"  {title[:40]} → {len(tweets)} tweets", flush=True)
+            print(f"  {label} → {len(tweets)} tweets ({n_ids} ids logged)", flush=True)
         else:
             empty += 1
-            print(f"  {title[:40]} → 0 tweets (skipped)", flush=True)
+            print(f"  {label} → 0 tweets ({n_ids} ids logged)", flush=True)
 
         time.sleep(interval_sec)
 
-    return {"collected": collected, "empty": empty, "skipped": skipped}
+    return {"collected": collected, "empty": empty, "skipped": 0}
