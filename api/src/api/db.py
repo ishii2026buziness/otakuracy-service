@@ -64,10 +64,11 @@ ORDER BY
     END,
     CASE WHEN COALESCE(group_end, group_start) >= DATE('now')
          THEN COALESCE(group_end, group_start) END ASC,
-    COALESCE(group_end, group_start) DESC
+    COALESCE(group_end, group_start) DESC,
+    start_time ASC NULLS LAST
 """
 
-_ORDER_NEW = "ORDER BY COALESCE(group_end, group_start) DESC NULLS LAST"
+_ORDER_NEW = "ORDER BY COALESCE(group_end, group_start) DESC NULLS LAST, start_time ASC NULLS LAST"
 
 
 
