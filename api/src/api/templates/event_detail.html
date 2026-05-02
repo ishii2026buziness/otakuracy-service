@@ -3,14 +3,22 @@
 
 {% block head %}
 <style>
-.tag-followable { display:inline-flex; align-items:center; }
-.tag-follow-icon {
-  background:none; border:none; cursor:pointer;
-  font-size:0.85rem; padding:0 0 0 2px; line-height:1;
-  color:var(--text-dim); opacity:0; transition:opacity 0.15s, color 0.15s;
+.tag-pop-wrap { position:relative; display:inline-block; }
+.tag-popover {
+  display:none; position:absolute;
+  bottom:calc(100% + 6px); left:50%; transform:translateX(-50%);
+  background:var(--surface2); border:1px solid var(--border);
+  border-radius:8px; padding:0.35rem 0.7rem;
+  white-space:nowrap; z-index:100; box-shadow:var(--shadow);
 }
-.tag-followable:hover .tag-follow-icon { opacity:1; }
-.tag-follow-icon.following { opacity:1; color:#f5c542; }
+.tag-pop-wrap:hover .tag-popover { display:block; }
+.tag-pop-follow {
+  background:none; border:none; cursor:pointer;
+  color:var(--text-muted); font-size:0.85rem; padding:0;
+  transition:color 0.15s;
+}
+.tag-pop-follow:hover { color:var(--text); }
+.tag-pop-follow.following { color:#f5c542; }
 
   .detail-hero {
     width: 100%;
@@ -228,10 +236,12 @@
         <h3>タグ</h3>
         <div class="card-tags">
           {% for kw in event.keywords %}
-          <span class="tag-followable">
+          <span class="tag-pop-wrap">
             <a href="/tags/{{ kw.keyword | urlencode }}" class="tag">{{ kw.keyword }}</a>
-            <button class="tag-follow-icon" data-tag="{{ kw.keyword }}"
-              onclick="toggleFollowBtn(this)" title="フォロー">☆</button>
+            <div class="tag-popover">
+              <button class="tag-pop-follow" data-tag="{{ kw.keyword }}"
+                onclick="toggleFollowBtn(this)">☆ フォロー</button>
+            </div>
           </span>
           {% endfor %}
         </div>
@@ -290,9 +300,9 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.textContent = '★';
     btn.classList.add('active');
   }
-  document.querySelectorAll('.tag-follow-icon[data-tag]').forEach(btn => {
+  document.querySelectorAll('.tag-pop-follow[data-tag]').forEach(btn => {
     if (ftHas(btn.dataset.tag)) {
-      btn.textContent = '★';
+      btn.textContent = '★ フォロー中';
       btn.classList.add('following');
     }
   });
@@ -300,7 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function toggleFollowBtn(btn) {
   const tag = btn.dataset.tag;
   const following = ftToggle(tag);
-  btn.textContent = following ? '★' : '☆';
+  btn.textContent = following ? '★ フォロー中' : '☆ フォロー';
   btn.classList.toggle('following', following);
   renderChipBar();
 }
