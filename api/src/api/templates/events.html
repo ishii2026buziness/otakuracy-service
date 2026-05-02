@@ -54,7 +54,7 @@
           {% if ev.start_time or ev.end_time %}
           <div class="card-meta-row">
             <span>⏰</span>
-            <span>開始 {{ ev.start_time | format_time }} / 終了 {{ ev.end_time | format_time }}</span>
+            <span>{{ ev.start_time }} 〜{% if ev.end_time %} {{ ev.end_time }}{% endif %}</span>
           </div>
           {% endif %}
           {% if ev.venue_name %}
