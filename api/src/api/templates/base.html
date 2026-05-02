@@ -304,10 +304,34 @@
   </div>
   <a href="/" class="nav-link">ホーム</a>
   <a href="/events" class="nav-link">イベント一覧</a>
+  <a href="/mylist" class="nav-link">
+    ★ マイリスト <span id="nav-bm-count" style="display:none;background:var(--accent);color:#fff;border-radius:10px;padding:0 6px;font-size:0.75rem;margin-left:4px;"></span>
+  </a>
 </nav>
 
 <main>
   {% block content %}{% endblock %}
 </main>
+<script>
+const BM_KEY = 'otakuracy_bookmarks';
+function bmLoad() { try { return JSON.parse(localStorage.getItem(BM_KEY) || '[]'); } catch { return []; } }
+function bmSave(ids) { localStorage.setItem(BM_KEY, JSON.stringify(ids)); }
+function bmHas(id) { return bmLoad().includes(id); }
+function bmToggle(id) {
+  let ids = bmLoad();
+  if (ids.includes(id)) { ids = ids.filter(x => x !== id); }
+  else { ids.push(id); }
+  bmSave(ids);
+  return ids.includes(id);
+}
+function bmUpdateNav() {
+  const n = bmLoad().length;
+  const el = document.getElementById('nav-bm-count');
+  if (!el) return;
+  el.textContent = n;
+  el.style.display = n > 0 ? 'inline' : 'none';
+}
+document.addEventListener('DOMContentLoaded', bmUpdateNav);
+</script>
 </body>
 </html>

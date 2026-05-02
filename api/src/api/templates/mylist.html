@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}マイリスト — otakuracy{% endblock %}
+
+{% block head %}
+<style>
+.empty-state { text-align:center; padding:4rem 0; color:var(--text-muted); }
+.empty-state .icon { font-size:3rem; margin-bottom:1rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="section-header">
+    <h1>★ マイリスト</h1>
+    <span class="count" id="mylist-count">0 件</span>
+  </div>
+  <div id="mylist-grid" class="cards-grid"></div>
+  <div id="mylist-empty" class="empty-state" style="display:none">
+    <div class="icon">☆</div>
+    <p>まだブックマークがありません</p>
+    <p style="margin-top:0.5rem"><a href="/events" style="color:var(--accent)">イベントを探す</a></p>
+  </div>
+</div>
+
+<script>
+const CARD_TPL = (ev) => `
+<a href="/events/${ev.event_id}" class="card">
+  ${ev.hero_image_url
+    ? `<img class="card-img" src="${ev.hero_image_url}" alt="${ev.title}" loading="lazy" onerror="this.style.display='none'">`
+    : `<div class="card-img-placeholder">🎪</div>`}
+  <div class="card-body">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.5rem">
+      <div class="card-title">${ev.title}</div>
+      <button class="bm-btn active" data-id="${ev.event_id}"
+        onclick="event.preventDefault();event.stopPropagation();removeCard(this,'${ev.event_id}')"
+        title="マイリストから削除" style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:#f5c542;padding:0;line-height:1;flex-shrink:0;">★</button>
+    </div>
+    <div class="card-meta">
+      <div class="card-meta-row"><span>📅</span><span>${fmtDate(ev.start_at)}${ev.end_at && ev.end_at !== ev.start_at ? ' 〜 ' + fmtDate(ev.end_at) : ''}</span></div>
+      ${ev.start_time ? `<div class="card-meta-row"><span>⏰</span><span>${ev.start_time} 〜${ev.end_time ? ' '+ev.end_time : ''}</span></div>` : ''}
+      ${ev.venue_name ? `<div class="card-meta-row"><span>📍</span><span>${ev.venue_name}</span></div>` : ''}
+      <div class="card-price">${fmtPrice(ev.price_min, ev.price_max)}</div>
+    </div>
+  </div>
+</a>`;
+
+function fmtDate(v) {
+  if (!v) return '日時未定';
+  const d = v.split('T')[0];
+  const [y,m,dd] = d.split('-');
+  return `${y}年${parseInt(m)}月${parseInt(dd)}日`;
+}
+function fmtPrice(min, max) {
+  if (min == null && max == null) return '価格未定';
+  if (min === max || max == null) return min ? `¥${Number(min).toLocaleString()}` : '無料';
+  return `¥${Number(min).toLocaleString()} 〜 ¥${Number(max).toLocaleString()}`;
+}
+
+function removeCard(btn, id) {
+  bmToggle(id);
+  btn.closest('.card').remove();
+  updateCount();
+  bmUpdateNav();
+}
+
+function updateCount() {
+  const n = document.querySelectorAll('#mylist-grid .card').length;
+  document.getElementById('mylist-count').textContent = n + ' 件';
+  document.getElementById('mylist-empty').style.display = n === 0 ? 'block' : 'none';
+}
+
+async function loadMylist() {
+  const ids = bmLoad();
+  const grid = document.getElementById('mylist-grid');
+  if (ids.length === 0) {
+    document.getElementById('mylist-empty').style.display = 'block';
+    document.getElementById('mylist-count').textContent = '0 件';
+    return;
+  }
+  document.getElementById('mylist-count').textContent = ids.length + ' 件';
+  const results = await Promise.all(
+    ids.map(id => fetch(`/api/events/${id}`).then(r => r.ok ? r.json() : null).catch(() => null))
+  );
+  results.filter(Boolean).forEach(ev => {
+    const div = document.createElement('div');
+    div.innerHTML = CARD_TPL(ev);
+    grid.appendChild(div.firstElementChild);
+  });
+  updateCount();
+}
+
+document.addEventListener('DOMContentLoaded', loadMylist);
+</script>
+{% endblock %}

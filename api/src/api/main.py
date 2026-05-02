@@ -144,6 +144,12 @@ async def event_detail(request: Request, event_id: str):
     )
 
 
+
+
+@app.get("/mylist", response_class=HTMLResponse)
+async def mylist(request: Request):
+    return templates.TemplateResponse(request, "mylist.html", {})
+
 @app.get("/tags/{tag}", response_class=HTMLResponse)
 async def tag_events(
     request: Request,

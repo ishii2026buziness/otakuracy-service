@@ -125,6 +125,13 @@
   }
   .breadcrumb a { color: var(--text-muted); text-decoration: none; }
   .breadcrumb a:hover { color: var(--text); }
+  .bm-btn {
+    background: none; border: none; cursor: pointer; font-size: 1.1rem;
+    color: var(--text-muted); padding: 0; line-height: 1; flex-shrink: 0;
+    transition: color 0.15s;
+  }
+  .bm-btn:hover, .bm-btn.active { color: #f5c542; }
+  .bm-btn-detail { font-size: 1.5rem; }
 </style>
 {% endblock %}
 
@@ -147,7 +154,10 @@
 
   <div class="detail-layout">
     <div>
-      <div class="detail-title">{{ event.title }}</div>
+      <div style="display:flex;align-items:flex-start;gap:0.75rem;margin-bottom:1.25rem">
+        <div class="detail-title" style="margin-bottom:0">{{ event.title }}</div>
+        <button class="bm-btn bm-btn-detail" id="bm-detail-btn" data-id="{{ event.event_id }}" onclick="bmToggleBtn(this)" title="マイリストに追加">☆</button>
+      </div>
 
       <div class="detail-section">
         <h3>イベント情報</h3>
@@ -252,4 +262,21 @@
     </div>
   </div>
 </div>
+
+<script>
+function bmToggleBtn(btn) {
+  const id = btn.dataset.id;
+  const added = bmToggle(id);
+  btn.textContent = added ? '★' : '☆';
+  btn.classList.toggle('active', added);
+  bmUpdateNav();
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('bm-detail-btn');
+  if (btn && bmHas(btn.dataset.id)) {
+    btn.textContent = '★';
+    btn.classList.add('active');
+  }
+});
+</script>
 {% endblock %}
