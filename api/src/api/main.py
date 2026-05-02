@@ -4,13 +4,16 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Query, Request, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from api import db
 
 app = FastAPI(title="otakuracy API", version="0.1.0")
+
+STATIC_DIR = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -102,6 +105,12 @@ async def api_tags(q: str = Query(""), limit: int = Query(50, ge=1, le=200)):
 # ---------------------------------------------------------------------------
 # UI routes
 # ---------------------------------------------------------------------------
+
+@app.get("/sw.js")
+async def service_worker():
+    return FileResponse(str(STATIC_DIR / "sw.js"), media_type="application/javascript",
+                        headers={"Service-Worker-Allowed": "/"})
+
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):

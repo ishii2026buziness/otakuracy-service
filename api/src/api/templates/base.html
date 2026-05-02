@@ -2,6 +2,9 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <meta name="theme-color" content="#7c6fff">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}otakuracy{% endblock %}</title>
   <style>
@@ -411,6 +414,13 @@ document.addEventListener('DOMContentLoaded', () => {
   renderChipBar();
   if (location.pathname === '/events') applyFollowedFilter();
 });
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
 </script>
 </body>
 </html>
