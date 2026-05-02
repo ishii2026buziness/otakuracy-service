@@ -3,22 +3,27 @@
 
 {% block head %}
 <style>
-.tag-pop-wrap { position:relative; display:inline-block; }
-.tag-popover {
-  display:none; position:absolute;
-  bottom:calc(100% + 6px); left:50%; transform:translateX(-50%);
-  background:var(--surface2); border:1px solid var(--border);
-  border-radius:8px; padding:0.35rem 0.7rem;
-  white-space:nowrap; z-index:100; box-shadow:var(--shadow);
+.tag-follow-chip {
+  display:inline-flex; align-items:center;
+  background:var(--tag-bg); border:1px solid var(--border);
+  border-radius:20px; overflow:hidden;
+  transition:border-color 0.15s;
 }
-/* hover managed by JS */
-.tag-pop-follow {
+.tag-follow-chip:hover { border-color: var(--accent); }
+.tag-follow-chip__name {
+  padding:0.2rem 0.4rem 0.2rem 0.65rem;
+  font-size:0.75rem; color:var(--text-muted);
+  text-decoration:none; white-space:nowrap;
+}
+.tag-follow-chip__name:hover { color:var(--text); }
+.tag-follow-chip__star {
+  padding:0.2rem 0.55rem 0.2rem 0.2rem;
   background:none; border:none; cursor:pointer;
-  color:var(--text-muted); font-size:0.85rem; padding:0;
-  transition:color 0.15s;
+  font-size:0.8rem; color:var(--text-dim);
+  transition:color 0.15s; line-height:1;
 }
-.tag-pop-follow:hover { color:var(--text); }
-.tag-pop-follow.following { color:#f5c542; }
+.tag-follow-chip__star:hover { color:var(--text-muted); }
+.tag-follow-chip__star.following { color:#f5c542; }
 
   .detail-hero {
     width: 100%;
@@ -236,12 +241,10 @@
         <h3>タグ</h3>
         <div class="card-tags">
           {% for kw in event.keywords %}
-          <span class="tag-pop-wrap">
-            <a href="/tags/{{ kw.keyword | urlencode }}" class="tag">{{ kw.keyword }}</a>
-            <div class="tag-popover">
-              <button class="tag-pop-follow" data-tag="{{ kw.keyword }}"
-                onclick="toggleFollowBtn(this)">☆ フォロー</button>
-            </div>
+          <span class="tag-follow-chip">
+            <a href="/tags/{{ kw.keyword | urlencode }}" class="tag-follow-chip__name">{{ kw.keyword }}</a>
+            <button class="tag-follow-chip__star" data-tag="{{ kw.keyword }}"
+              onclick="toggleFollowBtn(this)" title="フォロー">☆</button>
           </span>
           {% endfor %}
         </div>
@@ -300,9 +303,9 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.textContent = '★';
     btn.classList.add('active');
   }
-  document.querySelectorAll('.tag-pop-follow[data-tag]').forEach(btn => {
+  document.querySelectorAll('.tag-follow-chip__star[data-tag]').forEach(btn => {
     if (ftHas(btn.dataset.tag)) {
-      btn.textContent = '★ フォロー中';
+      btn.textContent = '★';
       btn.classList.add('following');
     }
   });
@@ -310,22 +313,10 @@ document.addEventListener('DOMContentLoaded', () => {
 function toggleFollowBtn(btn) {
   const tag = btn.dataset.tag;
   const following = ftToggle(tag);
-  btn.textContent = following ? '★ フォロー中' : '☆ フォロー';
+  btn.textContent = following ? '★' : '☆';
   btn.classList.toggle('following', following);
   renderChipBar();
 }
-document.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('.tag-pop-wrap').forEach(wrap => {
-    let t;
-    const pop = wrap.querySelector('.tag-popover');
-    if (!pop) return;
-    const show = () => { clearTimeout(t); pop.style.display = 'block'; };
-    const hide = () => { t = setTimeout(() => { pop.style.display = 'none'; }, 200); };
-    wrap.addEventListener('mouseenter', show);
-    wrap.addEventListener('mouseleave', hide);
-    pop.addEventListener('mouseenter', show);
-    pop.addEventListener('mouseleave', hide);
-  });
-});
+
 </script>
 {% endblock %}
