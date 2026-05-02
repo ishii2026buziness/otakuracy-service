@@ -247,10 +247,10 @@
       </div>
       {% endif %}
 
-      {% if event.keywords %}
       <div class="detail-section">
         <h3>タグ</h3>
         <div class="card-tags">
+          {% if event.keywords %}
           {% for kw in event.keywords %}
           <span class="tag-follow-chip">
             <a href="/tags/{{ kw.keyword | urlencode }}" class="tag-follow-chip__name">{{ kw.keyword }}</a>
@@ -258,9 +258,11 @@
               onclick="toggleFollowBtn(this)" title="フォロー">☆</button>
           </span>
           {% endfor %}
+          {% else %}
+          <span style="font-size:0.8rem;color:var(--text-dim)">タグ未設定</span>
+          {% endif %}
         </div>
       </div>
-      {% endif %}
 
       {% if event.ips %}
       <div class="detail-section">
