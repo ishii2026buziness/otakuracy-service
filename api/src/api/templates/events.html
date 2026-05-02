@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}
+  {% if tag %}#{{ tag }} のイベント{% elif q %}「{{ q }}」の検索結果{% else %}イベント一覧{% endif %} — otakuracy
+{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="section-header">
+    <h1>
+      {% if tag %}#{{ tag }}{% elif q %}「{{ q }}」の検索結果{% else %}すべてのイベント{% endif %}
+    </h1>
+    <span class="count">{{ pagination.total }} 件</span>
+    {% if tag %}<a href="/events" style="font-size:0.85rem;color:var(--text-muted);text-decoration:none;margin-left:auto;">✕ タグ解除</a>{% endif %}
+    {% if q %}<a href="/events" style="font-size:0.85rem;color:var(--text-muted);text-decoration:none;margin-left:auto;">✕ 検索解除</a>{% endif %}
+  </div>
+
+  {% if events %}
+  <div class="cards-grid">
+    {% for ev in events %}
+    <a href="/events/{{ ev.event_id }}" class="card">
+      {% if ev.hero_image_url %}
+        <img class="card-img" src="{{ ev.hero_image_url }}" alt="{{ ev.title }}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div class="card-img-placeholder" style="display:none">🎪</div>
+      {% else %}
+        <div class="card-img-placeholder">🎪</div>
+      {% endif %}
+      <div class="card-body">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.5rem">
+          <div class="card-title">{{ ev.title }}</div>
+          {% if ev.status == 'announced' %}<span class="badge badge-announced">予定</span>
+          {% elif ev.status == 'ongoing' %}<span class="badge badge-ongoing">開催中</span>
+          {% elif ev.status == 'ended' %}<span class="badge badge-ended">終了</span>
+          {% endif %}
+        </div>
+        <div class="card-meta">
+          <div class="card-meta-row">
+            <span>📅</span>
+            <span>{{ ev.start_at | format_date }}{% if ev.end_at and ev.end_at != ev.start_at %} 〜 {{ ev.end_at | format_date }}{% endif %}</span>
+          </div>
+          {% if ev.venue_name %}
+          <div class="card-meta-row">
+            <span>📍</span>
+            <span>{{ ev.venue_name }}{% if ev.area_code %} ({{ ev.area_code }}){% endif %}</span>
+          </div>
+          {% elif ev.is_online %}
+          <div class="card-meta-row">
+            <span>🌐</span>
+            <span>オンライン</span>
+          </div>
+          {% endif %}
+          <div class="card-price">{{ ev.price_min | format_price(ev.price_max) }}</div>
+        </div>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+
+  {# Pagination #}
+  {% if pagination.total_pages > 1 %}
+  <div class="pagination">
+    {% if pagination.has_prev %}
+      <a href="?q={{ q }}&tag={{ tag }}&page={{ pagination.page - 1 }}">← 前</a>
+    {% else %}
+      <span class="disabled">← 前</span>
+    {% endif %}
+
+    {% for p in range([1, pagination.page - 2] | max, [pagination.total_pages + 1, pagination.page + 3] | min) %}
+      {% if p == pagination.page %}
+        <span class="current">{{ p }}</span>
+      {% else %}
+        <a href="?q={{ q }}&tag={{ tag }}&page={{ p }}">{{ p }}</a>
+      {% endif %}
+    {% endfor %}
+
+    {% if pagination.has_next %}
+      <a href="?q={{ q }}&tag={{ tag }}&page={{ pagination.page + 1 }}">次 →</a>
+    {% else %}
+      <span class="disabled">次 →</span>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="empty-state">
+    <div class="icon">🔍</div>
+    <p>該当するイベントが見つかりませんでした</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

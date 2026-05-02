@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% block title %}{{ event.title }} — otakuracy{% endblock %}
+
+{% block head %}
+<style>
+  .detail-hero {
+    width: 100%;
+    max-height: 360px;
+    object-fit: cover;
+    border-radius: 0 0 var(--radius) var(--radius);
+  }
+  .detail-hero-placeholder {
+    width: 100%;
+    height: 200px;
+    background: linear-gradient(135deg, var(--surface), var(--surface2));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 4rem;
+    border-radius: 0 0 var(--radius) var(--radius);
+  }
+  .detail-layout {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 2rem;
+    align-items: start;
+  }
+  @media (max-width: 768px) {
+    .detail-layout { grid-template-columns: 1fr; }
+  }
+  .detail-title {
+    font-size: 1.6rem;
+    font-weight: 800;
+    line-height: 1.3;
+    margin-bottom: 1.25rem;
+  }
+  .detail-section {
+    margin-bottom: 1.75rem;
+  }
+  .detail-section h3 {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-bottom: 0.6rem;
+  }
+  .detail-info-grid {
+    display: grid;
+    gap: 0.5rem;
+  }
+  .detail-info-row {
+    display: flex;
+    gap: 0.75rem;
+    font-size: 0.95rem;
+  }
+  .detail-info-label {
+    color: var(--text-muted);
+    min-width: 64px;
+    flex-shrink: 0;
+  }
+  .detail-info-value a {
+    color: var(--accent);
+  }
+  .sidebar-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    position: sticky;
+    top: 72px;
+  }
+  .btn {
+    display: block;
+    text-align: center;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    font-size: 0.95rem;
+    text-decoration: none;
+    transition: opacity 0.15s;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .price-display {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--accent2);
+    text-align: center;
+  }
+  .ip-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .ip-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9rem;
+  }
+  .confidence-bar {
+    width: 60px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .confidence-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+  }
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 1.5rem;
+  }
+  .breadcrumb a { color: var(--text-muted); text-decoration: none; }
+  .breadcrumb a:hover { color: var(--text); }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if event.hero_image_url %}
+  <img class="detail-hero" src="{{ event.hero_image_url }}" alt="{{ event.title }}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+  <div class="detail-hero-placeholder" style="display:none">🎪</div>
+{% else %}
+  <div class="detail-hero-placeholder">🎪</div>
+{% endif %}
+
+<div class="container">
+  <div class="breadcrumb">
+    <a href="/">ホーム</a>
+    <span>/</span>
+    <a href="/events">イベント</a>
+    <span>/</span>
+    <span>{{ event.title[:30] }}{% if event.title|length > 30 %}...{% endif %}</span>
+  </div>
+
+  <div class="detail-layout">
+    <div>
+      <div class="detail-title">{{ event.title }}</div>
+
+      <div class="detail-section">
+        <h3>イベント情報</h3>
+        <div class="detail-info-grid">
+          <div class="detail-info-row">
+            <span class="detail-info-label">📅 日程</span>
+            <span class="detail-info-value">
+              {{ event.start_at | format_date }}
+              {% if event.end_at and event.end_at != event.start_at %}
+                〜 {{ event.end_at | format_date }}
+              {% endif %}
+            </span>
+          </div>
+          {% if event.venue_name %}
+          <div class="detail-info-row">
+            <span class="detail-info-label">📍 会場</span>
+            <span class="detail-info-value">{{ event.venue_name }}{% if event.area_code %} ({{ event.area_code }}){% endif %}</span>
+          </div>
+          {% elif event.is_online %}
+          <div class="detail-info-row">
+            <span class="detail-info-label">🌐 形式</span>
+            <span class="detail-info-value">オンライン</span>
+          </div>
+          {% endif %}
+          {% if event.price_min is not none or event.price_max is not none %}
+          <div class="detail-info-row">
+            <span class="detail-info-label">💴 料金</span>
+            <span class="detail-info-value" style="color:var(--accent2);font-weight:600">{{ event.price_min | format_price(event.price_max) }}</span>
+          </div>
+          {% endif %}
+          <div class="detail-info-row">
+            <span class="detail-info-label">📌 状態</span>
+            <span class="detail-info-value">
+              {% if event.status == 'announced' %}<span class="badge badge-announced">予定</span>
+              {% elif event.status == 'ongoing' %}<span class="badge badge-ongoing">開催中</span>
+              {% elif event.status == 'ended' %}<span class="badge badge-ended">終了</span>
+              {% else %}<span>{{ event.status }}</span>
+              {% endif %}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {% if event.summary %}
+      <div class="detail-section">
+        <h3>概要</h3>
+        <p style="font-size:0.95rem;line-height:1.8;color:var(--text-muted)">{{ event.summary }}</p>
+      </div>
+      {% endif %}
+
+      {% if event.keywords %}
+      <div class="detail-section">
+        <h3>タグ</h3>
+        <div class="card-tags">
+          {% for kw in event.keywords %}
+          <a href="/tags/{{ kw.keyword | urlencode }}" class="tag">{{ kw.keyword }}</a>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      {% if event.ips %}
+      <div class="detail-section">
+        <h3>関連IP</h3>
+        <div class="ip-list">
+          {% for ip in event.ips %}
+          <div class="ip-item">
+            <span>{{ ip.display_name }}</span>
+            <div class="confidence-bar">
+              <div class="confidence-fill" style="width: {{ (ip.confidence * 100) | int }}%"></div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    {# Sidebar #}
+    <div class="sidebar-card">
+      {% if event.price_min is not none or event.price_max is not none %}
+      <div class="price-display">{{ event.price_min | format_price(event.price_max) }}</div>
+      {% endif %}
+
+      {% if event.primary_ticket_url %}
+      <a href="{{ event.primary_ticket_url }}" target="_blank" rel="noopener" class="btn btn-primary">🎟 チケットを購入</a>
+      {% endif %}
+
+      {% if event.official_url %}
+      <a href="{{ event.official_url }}" target="_blank" rel="noopener" class="btn btn-secondary">🔗 公式サイト</a>
+      {% endif %}
+
+      <div style="font-size:0.75rem;color:var(--text-dim);text-align:center">
+        ID: {{ event.event_id[:8] }}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

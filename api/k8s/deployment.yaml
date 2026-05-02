@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otakuracy-api
+  namespace: apps
+  labels:
+    app: otakuracy-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otakuracy-api
+  template:
+    metadata:
+      labels:
+        app: otakuracy-api
+    spec:
+      containers:
+        - name: api
+          image: localhost/otakuracy-api:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 9000
+          env:
+            - name: PYTHONPATH
+              value: /app/src
+          volumeMounts:
+            - name: db
+              mountPath: /data
+              readOnly: true
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      volumes:
+        - name: db
+          hostPath:
+            path: /srv/otakuracy/data
+            type: Directory
