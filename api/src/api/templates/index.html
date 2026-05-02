@@ -9,7 +9,7 @@
     <div class="section-header" style="margin-bottom:0.75rem">
       <h2 style="font-size:1rem;color:var(--text-muted)">人気タグ</h2>
     </div>
-    <div id="popular-tags" style="overflow-x:auto;white-space:nowrap;padding-bottom:4px"></div>
+    <div id="popular-tags" style="display:flex;flex-wrap:wrap;gap:0.4rem"></div>
   </div>
 
   <!-- ブックマークセクション（JS描画） -->
@@ -68,7 +68,7 @@ async function loadPopularTags() {
   const el = document.getElementById('popular-tags');
   if (!el) return;
   el.innerHTML = data.tags.map(t =>
-    `<a href="/events?tag=${encodeURIComponent(t.keyword)}" class="tag" style="margin-right:0.4rem">${t.keyword}</a>`
+    `<a href="/events?tag=${encodeURIComponent(t.keyword)}" class="tag" ">${t.keyword}</a>`
   ).join('');
 }
 

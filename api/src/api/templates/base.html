@@ -56,9 +56,15 @@
       letter-spacing: -0.02em;
     }
     .nav-logo span { color: var(--accent2); }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
     .nav-search-mini {
-      flex: 1;
-      max-width: 480px;
+      margin-left: auto;
+      max-width: 320px;
+      width: 320px;
     }
     .nav-search-mini form {
       display: flex;
@@ -318,17 +324,19 @@
 <body>
 <nav>
   <a href="/" class="nav-logo">otaku<span>racy</span></a>
+  <div class="nav-links">
+    <a href="/" class="nav-link">ホーム</a>
+    <a href="/events" class="nav-link">イベント</a>
+    <a href="/mylist" class="nav-link">
+      ★ マイリスト <span id="nav-bm-count" style="display:none;background:var(--accent);color:#fff;border-radius:10px;padding:0 6px;font-size:0.75rem;margin-left:4px;"></span>
+    </a>
+  </div>
   <div class="nav-search-mini">
     <form action="/events" method="get">
-      <input type="text" name="q" placeholder="イベント・アーティスト・IPを検索...">
+      <input type="text" name="q" placeholder="🔍 検索...">
       <button type="submit">検索</button>
     </form>
   </div>
-  <a href="/" class="nav-link">ホーム</a>
-  <a href="/events" class="nav-link">イベント一覧</a>
-  <a href="/mylist" class="nav-link">
-    ★ マイリスト <span id="nav-bm-count" style="display:none;background:var(--accent);color:#fff;border-radius:10px;padding:0 6px;font-size:0.75rem;margin-left:4px;"></span>
-  </a>
 </nav>
 <div id="tag-chip-bar" style="display:none;background:var(--surface);border-bottom:1px solid var(--border);padding:0.5rem 1.5rem;align-items:center;gap:0.5rem;flex-wrap:wrap;">
   <span style="font-size:0.8rem;color:var(--text-muted);white-space:nowrap;">フォロー中:</span>

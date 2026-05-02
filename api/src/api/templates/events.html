@@ -36,7 +36,7 @@
   </div>
 
   <!-- 人気タグ横スクロールバー -->
-  <div id="popular-tags-bar" style="margin-bottom:1.25rem;overflow-x:auto;white-space:nowrap;padding-bottom:4px">
+  <div id="popular-tags-bar" style="margin-bottom:1.25rem;display:flex;flex-wrap:wrap;align-items:center;gap:0.4rem">
     <span style="font-size:0.8rem;color:var(--text-muted);margin-right:0.5rem">人気タグ:</span>
     <span id="popular-tags-list"></span>
   </div>
@@ -50,7 +50,7 @@
     list.innerHTML = data.tags.map(t =>
       `<a href="/events?tag=${encodeURIComponent(t.keyword)}"
          class="tag${t.keyword === currentTag ? ' tag-active' : ''}"
-         style="margin-right:0.4rem">${t.keyword}</a>`
+         ">${t.keyword}</a>`
     ).join('');
   })();
   </script>
