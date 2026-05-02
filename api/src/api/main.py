@@ -105,11 +105,7 @@ async def api_tags(q: str = Query(""), limit: int = Query(50, ge=1, le=200)):
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    tags = db.list_tags(limit=40)
-    return templates.TemplateResponse(
-        request, "index.html",
-        {"tags": tags},
-    )
+    return templates.TemplateResponse(request, "index.html", {})
 
 
 @app.get("/events", response_class=HTMLResponse)

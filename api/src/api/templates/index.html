@@ -1,98 +1,110 @@
 {% extends "base.html" %}
-{% block title %}otakuracy — アニメ・マンガ・VTuberイベント検索{% endblock %}
-
-{% block head %}
-<style>
-  .hero {
-    text-align: center;
-    padding: 4rem 1.5rem 2rem;
-  }
-  .hero h1 {
-    font-size: 2.5rem;
-    font-weight: 800;
-    letter-spacing: -0.03em;
-    line-height: 1.15;
-    margin-bottom: 0.75rem;
-  }
-  .hero h1 .accent { color: var(--accent); }
-  .hero h1 .accent2 { color: var(--accent2); }
-  .hero p {
-    color: var(--text-muted);
-    font-size: 1.05rem;
-    margin-bottom: 2rem;
-  }
-  .search-box {
-    max-width: 600px;
-    margin: 0 auto 2.5rem;
-  }
-  .search-box form {
-    display: flex;
-    gap: 0.75rem;
-  }
-  .search-box input[type="text"] {
-    flex: 1;
-    background: var(--surface);
-    border: 2px solid var(--border);
-    border-radius: var(--radius);
-    color: var(--text);
-    padding: 0.8rem 1.2rem;
-    font-size: 1rem;
-    outline: none;
-    transition: border-color 0.2s;
-  }
-  .search-box input[type="text"]:focus {
-    border-color: var(--accent);
-  }
-  .search-box button {
-    background: var(--accent);
-    border: none;
-    border-radius: var(--radius);
-    color: #fff;
-    padding: 0.8rem 1.6rem;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: opacity 0.15s;
-    white-space: nowrap;
-  }
-  .search-box button:hover { opacity: 0.85; }
-
-  .tags-section {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 0 1.5rem 4rem;
-  }
-  .tags-section h2 {
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--text-muted);
-    margin-bottom: 1rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-  }
-</style>
-{% endblock %}
+{% block title %}otakuracy — あなたのイベントフィード{% endblock %}
 
 {% block content %}
-<div class="hero">
-  <h1><span class="accent">アニメ</span>・<span class="accent2">マンガ</span>・VTuberのイベントを探す</h1>
-  <p>展示会・ライブ・舞台・コラボカフェまで一括検索</p>
-  <div class="search-box">
-    <form action="/events" method="get">
-      <input type="text" name="q" placeholder="ハイキュー!!、ホロライブ、Ave Mujica...">
-      <button type="submit">🔍 検索</button>
-    </form>
+<div class="container" style="padding-top:1.5rem">
+
+  <!-- ブックマークセクション（JS描画） -->
+  <div id="bm-section" style="display:none;margin-bottom:2rem">
+    <div class="section-header" style="margin-bottom:1rem">
+      <h2 style="font-size:1.1rem">★ ブックマーク中</h2>
+      <a href="/mylist" style="font-size:0.85rem;color:var(--accent);text-decoration:none;margin-left:auto">すべて見る →</a>
+    </div>
+    <div id="bm-mini-grid" class="cards-grid" style="--cols:4"></div>
   </div>
+
+  <!-- フォロー中タグのフィード -->
+  <div id="feed-section">
+    <div class="section-header" style="margin-bottom:1rem">
+      <h2 style="font-size:1.1rem" id="feed-title">フォロー中のイベント</h2>
+      <span class="count" id="feed-count" style="display:none"></span>
+    </div>
+    <div id="feed-grid" class="cards-grid"></div>
+    <div id="feed-empty" style="display:none;text-align:center;padding:3rem 0;color:var(--text-muted)">
+      <div style="font-size:2.5rem;margin-bottom:1rem">☆</div>
+      <p>フォローしているタグがありません</p>
+      <p style="margin-top:0.75rem">
+        <a href="/events" style="color:var(--accent);text-decoration:none">イベントを探してタグをフォローしよう →</a>
+      </p>
+    </div>
+    <div id="feed-loading" style="text-align:center;padding:3rem 0;color:var(--text-muted)">読み込み中...</div>
+  </div>
+
 </div>
 
-<div class="tags-section">
-  <h2>人気タグ</h2>
-  <div class="tag-cloud">
-    {% for tag in tags %}
-    <a href="/tags/{{ tag.keyword | urlencode }}" class="tag">
-      {{ tag.keyword }} <span style="color:var(--text-dim)">{{ tag.event_count }}</span>
-    </a>
-    {% endfor %}
-  </div>
-</div>
+<script>
+function fmtDate(v) {
+  if (!v) return '日時未定';
+  const d = v.split('T')[0], [y,m,dd] = d.split('-');
+  return `${y}年${parseInt(m)}月${parseInt(dd)}日`;
+}
+function fmtPrice(min, max) {
+  if (min == null && max == null) return '価格未定';
+  if (min === max || max == null) return min ? `¥${Number(min).toLocaleString()}` : '無料';
+  return `¥${Number(min).toLocaleString()} 〜 ¥${Number(max).toLocaleString()}`;
+}
+function cardHtml(ev) {
+  return `<a href="/events/${ev.event_id}" class="card">
+    ${ev.hero_image_url
+      ? `<img class="card-img" src="${ev.hero_image_url}" alt="${ev.title}" loading="lazy" onerror="this.style.display='none'">`
+      : `<div class="card-img-placeholder">🎪</div>`}
+    <div class="card-body">
+      <div class="card-title">${ev.title}</div>
+      <div class="card-meta">
+        <div class="card-meta-row"><span>📅</span><span>${fmtDate(ev.start_at)}${ev.end_at && ev.end_at !== ev.start_at ? ' 〜 ' + fmtDate(ev.end_at) : ''}</span></div>
+        ${ev.start_time ? `<div class="card-meta-row"><span>⏰</span><span>${ev.start_time} 〜${ev.end_time ? ' '+ev.end_time : ''}</span></div>` : ''}
+        ${ev.venue_name ? `<div class="card-meta-row"><span>📍</span><span>${ev.venue_name}</span></div>` : ''}
+        <div class="card-price">${fmtPrice(ev.price_min, ev.price_max)}</div>
+      </div>
+    </div>
+  </a>`;
+}
+
+async function loadFeed() {
+  const tags = ftLoad();
+  const loading = document.getElementById('feed-loading');
+  const empty   = document.getElementById('feed-empty');
+  const grid    = document.getElementById('feed-grid');
+  const count   = document.getElementById('feed-count');
+
+  if (tags.length === 0) {
+    loading.style.display = 'none';
+    empty.style.display = 'block';
+    return;
+  }
+
+  const params = new URLSearchParams({ tags: tags.join(','), limit: 24, sort: 'near' });
+  const res = await fetch(`/api/events?${params}`);
+  const data = await res.json();
+  loading.style.display = 'none';
+
+  if (data.items.length === 0) {
+    empty.style.display = 'block';
+    return;
+  }
+  count.textContent = data.total + ' 件';
+  count.style.display = '';
+  grid.innerHTML = data.items.map(cardHtml).join('');
+}
+
+async function loadBookmarks() {
+  const ids = bmLoad();
+  if (ids.length === 0) return;
+  const section = document.getElementById('bm-section');
+  const grid    = document.getElementById('bm-mini-grid');
+  const preview = ids.slice(0, 4);
+  const results = await Promise.all(
+    preview.map(id => fetch(`/api/events/${id}`).then(r => r.ok ? r.json() : null).catch(() => null))
+  );
+  const valid = results.filter(Boolean);
+  if (valid.length === 0) return;
+  section.style.display = 'block';
+  grid.innerHTML = valid.map(cardHtml).join('');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadBookmarks();
+  loadFeed();
+});
+</script>
 {% endblock %}
