@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  labels:
+    app: otakuracy
+  name: otakuracy-keyword-extract
+  namespace: default
+spec:
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 3
+  successfulJobsHistoryLimit: 3
+  schedule: "0 10 * * *"
+  suspend: false
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 3600
+      backoffLimit: 1
+      template:
+        spec:
+          hostNetwork: true
+          restartPolicy: OnFailure
+          containers:
+          - name: keyword-extract
+            image: localhost/otakuracy-pipeline:latest
+            imagePullPolicy: Never
+            workingDir: /app
+            command:
+            - /app/.venv/bin/python
+            - -m
+            - cli_keyword_extract
+            - run
+            env:
+            - name: PYTHONPATH
+              value: /app/src:/common/src
+            - name: CLAUDE_GATEWAY_URL
+              value: http://127.0.0.1:18080
+            volumeMounts:
+            - mountPath: /data
+              name: data
+          volumes:
+          - name: data
+            hostPath:
+              path: /srv/otakuracy/data
+              type: Directory
