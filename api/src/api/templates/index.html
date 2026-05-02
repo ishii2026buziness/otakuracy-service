@@ -24,10 +24,14 @@
 
     <div id="feed-grid" class="cards-grid"></div>
     <div id="feed-loading" style="text-align:center;padding:3rem 0;color:var(--text-muted)">読み込み中...</div>
-    <div id="feed-empty" style="display:none" class="empty-state">
-      <div class="icon">🔖</div>
-      <p>フォロー中のタグがありません。<br>イベント詳細のタグの ☆ でフォローできます。</p>
-      <a href="/events" style="display:inline-block;margin-top:1rem;color:var(--accent);font-size:0.9rem">イベントを探す →</a>
+
+    <!-- フォロー中タブ: タグ未設定時の空状態 -->
+    <div id="feed-empty" style="display:none;padding:2rem 0">
+      <p style="color:var(--text-muted);font-size:0.95rem;margin-bottom:1.25rem">
+        タグをフォローすると、関連するイベントがここに表示されます。<br>
+        ☆ を押してタグをフォローしてみましょう：
+      </p>
+      <div id="empty-popular-tags" style="display:flex;flex-wrap:wrap;gap:0.5rem"></div>
     </div>
   </div>
 
@@ -61,14 +65,45 @@ function cardHtml(ev) {
   </a>`;
 }
 
+let popularTagsCache = [];
+
 async function loadPopularTags() {
   const res = await fetch('/api/tags?limit=20');
   const data = await res.json();
+  popularTagsCache = data.tags;
+
+  // ナビ下の人気タグ欄
   const el = document.getElementById('popular-tags');
-  if (!el) return;
-  el.innerHTML = data.tags.map(t =>
-    `<a href="/events?tag=${encodeURIComponent(t.keyword)}" class="tag">${t.keyword}</a>`
-  ).join('');
+  if (el) {
+    el.innerHTML = data.tags.map(t =>
+      `<a href="/events?tag=${encodeURIComponent(t.keyword)}" class="tag">${t.keyword}</a>`
+    ).join('');
+  }
+}
+
+function renderEmptyStateTags() {
+  const container = document.getElementById('empty-popular-tags');
+  if (!container) return;
+  container.innerHTML = popularTagsCache.map(t => {
+    const following = ftHas(t.keyword);
+    return `<span style="display:inline-flex;align-items:center;gap:0;background:var(--tag-bg);border:1px solid var(--border);border-radius:20px;overflow:hidden">
+      <span style="padding:0.25rem 0.4rem 0.25rem 0.75rem;font-size:0.8rem;color:var(--text-muted)">${t.keyword}</span>
+      <button onclick="emptyTagFollow(this,'${t.keyword.replace(/'/g, "\\'")}')"
+        style="padding:0.25rem 0.65rem 0.25rem 0.2rem;background:none;border:none;cursor:pointer;font-size:0.85rem;transition:color 0.15s;color:${following ? '#f5c542' : 'var(--text-dim)'}"
+        title="${following ? 'フォロー解除' : 'フォロー'}">${following ? '★' : '☆'}</button>
+    </span>`;
+  }).join('');
+}
+
+function emptyTagFollow(btn, tag) {
+  const following = ftToggle(tag);
+  btn.textContent = following ? '★' : '☆';
+  btn.style.color = following ? '#f5c542' : 'var(--text-dim)';
+  updateFtCount();
+  if (following) {
+    // タグをフォローしたのでフィードをリロード
+    loadFeed('following');
+  }
 }
 
 function updateFtCount() {
@@ -94,6 +129,7 @@ async function loadFeed(tab) {
     const tags = ftLoad();
     if (tags.length === 0) {
       loading.style.display = 'none';
+      renderEmptyStateTags();
       empty.style.display = '';
       return;
     }
@@ -127,10 +163,9 @@ function switchTab(tab) {
   loadFeed(tab);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   updateFtCount();
-  loadPopularTags();
-  // フォロー中タグがあれば「フォロー中」タブをデフォルトに
+  await loadPopularTags();
   const saved = localStorage.getItem('otakuracy_home_tab');
   const defaultTab = saved || (ftLoad().length > 0 ? 'following' : 'all');
   switchTab(defaultTab);
