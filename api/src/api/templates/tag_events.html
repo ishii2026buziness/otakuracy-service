@@ -12,6 +12,9 @@
   <div class="section-header">
     <h1># {{ tag }}</h1>
     <span class="count">{{ pagination.total }} 件</span>
+    <button class="follow-btn" id="tag-follow-btn" data-tag="{{ tag }}" onclick="toggleTagPageFollow(this)">
+      + フォロー
+    </button>
     <a href="/events" style="font-size:0.85rem;color:var(--text-muted);text-decoration:none;margin-left:auto">← 全イベントへ</a>
   </div>
 
@@ -87,4 +90,20 @@
   </div>
   {% endif %}
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('tag-follow-btn');
+  if (btn && ftHas(btn.dataset.tag)) {
+    btn.textContent = 'フォロー中 ✓';
+    btn.classList.add('following');
+  }
+});
+function toggleTagPageFollow(btn) {
+  const tag = btn.dataset.tag;
+  const following = ftToggle(tag);
+  btn.textContent = following ? 'フォロー中 ✓' : '+ フォロー';
+  btn.classList.toggle('following', following);
+  renderChipBar();
+}
+</script>
 {% endblock %}

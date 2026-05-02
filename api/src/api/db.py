@@ -75,6 +75,7 @@ _ORDER_NEW = "ORDER BY COALESCE(group_end, group_start) DESC NULLS LAST, start_t
 def search_events(
     q: str = "",
     tag: str = "",
+    tags: list[str] | None = None,
     page: int = 1,
     limit: int = 24,
     sort: str = "near",
@@ -99,6 +100,18 @@ def search_events(
             )"""
         )
         params.append(tag)
+
+    if tags:
+        placeholders = ",".join("?" * len(tags))
+        filter_clauses.append(
+            f"""(d.title, COALESCE(d.venue_id, '')) IN (
+                SELECT e2.title, COALESCE(e2.venue_id, '')
+                FROM event e2
+                JOIN event_keywords ek2 ON e2.event_id = ek2.event_id
+                WHERE ek2.keyword IN ({placeholders})
+            )"""
+        )
+        params += tags
 
     where_sql = "WHERE " + " AND ".join(filter_clauses)
 

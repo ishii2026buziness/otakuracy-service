@@ -219,7 +219,11 @@
         <h3>タグ</h3>
         <div class="card-tags">
           {% for kw in event.keywords %}
-          <a href="/tags/{{ kw.keyword | urlencode }}" class="tag">{{ kw.keyword }}</a>
+          <span style="display:inline-flex;align-items:center;gap:0.3rem;">
+            <a href="/tags/{{ kw.keyword | urlencode }}" class="tag">{{ kw.keyword }}</a>
+            <button class="follow-btn" data-tag="{{ kw.keyword }}"
+              onclick="toggleFollowBtn(this)">+ フォロー</button>
+          </span>
           {% endfor %}
         </div>
       </div>
@@ -277,6 +281,19 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.textContent = '★';
     btn.classList.add('active');
   }
+  document.querySelectorAll('.follow-btn[data-tag]').forEach(btn => {
+    if (ftHas(btn.dataset.tag)) {
+      btn.textContent = 'フォロー中 ✓';
+      btn.classList.add('following');
+    }
+  });
 });
+function toggleFollowBtn(btn) {
+  const tag = btn.dataset.tag;
+  const following = ftToggle(tag);
+  btn.textContent = following ? 'フォロー中 ✓' : '+ フォロー';
+  btn.classList.toggle('following', following);
+  renderChipBar();
+}
 </script>
 {% endblock %}

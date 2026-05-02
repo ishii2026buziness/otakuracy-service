@@ -285,6 +285,25 @@
       gap: 0.5rem;
     }
 
+    /* Follow tag chips */
+    .tag-chip {
+      display:inline-flex;align-items:center;gap:0.3rem;
+      background:var(--tag-bg);border:1px solid var(--border);border-radius:20px;
+      padding:0.2rem 0.6rem;font-size:0.8rem;color:var(--text);
+    }
+    .tag-chip button {
+      background:none;border:none;cursor:pointer;color:var(--text-muted);
+      font-size:0.9rem;padding:0;line-height:1;
+    }
+    .tag-chip button:hover { color:var(--text); }
+    .follow-btn {
+      font-size:0.8rem;padding:0.25rem 0.6rem;border-radius:6px;
+      border:1px solid var(--border);background:var(--surface2);
+      color:var(--text-muted);cursor:pointer;transition:all 0.15s;white-space:nowrap;
+    }
+    .follow-btn:hover { border-color:var(--accent);color:var(--text); }
+    .follow-btn.following { background:var(--accent);color:#fff;border-color:var(--accent); }
+
     /* Responsive */
     @media (max-width: 600px) {
       .nav-search-mini { display: none; }
@@ -308,6 +327,10 @@
     ★ マイリスト <span id="nav-bm-count" style="display:none;background:var(--accent);color:#fff;border-radius:10px;padding:0 6px;font-size:0.75rem;margin-left:4px;"></span>
   </a>
 </nav>
+<div id="tag-chip-bar" style="display:none;background:var(--surface);border-bottom:1px solid var(--border);padding:0.5rem 1.5rem;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+  <span style="font-size:0.8rem;color:var(--text-muted);white-space:nowrap;">フォロー中:</span>
+  <div id="tag-chips" style="display:flex;gap:0.4rem;flex-wrap:wrap;"></div>
+</div>
 
 <main>
   {% block content %}{% endblock %}
@@ -331,7 +354,63 @@ function bmUpdateNav() {
   el.textContent = n;
   el.style.display = n > 0 ? 'inline' : 'none';
 }
-document.addEventListener('DOMContentLoaded', bmUpdateNav);
+
+const FT_KEY = 'otakuracy_followed_tags';
+function ftLoad() { try { return JSON.parse(localStorage.getItem(FT_KEY) || '[]'); } catch { return []; } }
+function ftSave(tags) { localStorage.setItem(FT_KEY, JSON.stringify(tags)); }
+function ftHas(tag) { return ftLoad().includes(tag); }
+function ftToggle(tag) {
+  let tags = ftLoad();
+  if (tags.includes(tag)) { tags = tags.filter(t => t !== tag); }
+  else { tags.push(tag); }
+  ftSave(tags);
+  return tags.includes(tag);
+}
+
+function renderChipBar() {
+  const tags = ftLoad();
+  const bar = document.getElementById('tag-chip-bar');
+  const container = document.getElementById('tag-chips');
+  if (!bar || !container) return;
+  container.innerHTML = '';
+  if (tags.length === 0) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  tags.forEach(tag => {
+    const chip = document.createElement('span');
+    chip.className = 'tag-chip';
+    chip.innerHTML = `${tag} <button onclick="ftUnfollow('${tag.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">&#215;</button>`;
+    container.appendChild(chip);
+  });
+}
+
+function ftUnfollow(tag) {
+  ftToggle(tag);
+  renderChipBar();
+  if (location.pathname === '/events') applyFollowedFilter();
+}
+
+function applyFollowedFilter() {
+  const tags = ftLoad();
+  const params = new URLSearchParams(location.search);
+  if (params.get('q') || params.get('tag')) return;
+  if (tags.length === 0) {
+    if (params.get('tags')) { params.delete('tags'); location.search = params.toString(); }
+    return;
+  }
+  const current = params.get('tags') || '';
+  const desired = tags.join(',');
+  if (current !== desired) {
+    params.set('tags', desired);
+    params.set('page', '1');
+    location.search = params.toString();
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  bmUpdateNav();
+  renderChipBar();
+  if (location.pathname === '/events') applyFollowedFilter();
+});
 </script>
 </body>
 </html>
