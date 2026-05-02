@@ -65,8 +65,9 @@ async def api_events(
     tag: str = Query(""),
     page: int = Query(1, ge=1),
     limit: int = Query(24, ge=1, le=100),
+    sort: str = Query("near"),
 ):
-    items, total = db.search_events(q=q, tag=tag, page=page, limit=limit)
+    items, total = db.search_events(q=q, tag=tag, page=page, limit=limit, sort=sort)
     return {
         "items": items,
         "total": total,
@@ -108,9 +109,10 @@ async def events_list(
     q: str = Query(""),
     tag: str = Query(""),
     page: int = Query(1, ge=1),
+    sort: str = Query("near"),
 ):
     limit = 24
-    items, total = db.search_events(q=q, tag=tag, page=page, limit=limit)
+    items, total = db.search_events(q=q, tag=tag, page=page, limit=limit, sort=sort)
     pagination = _pagination(page, total, limit)
     return templates.TemplateResponse(
         request, "events.html",
@@ -118,6 +120,7 @@ async def events_list(
             "events": items,
             "q": q,
             "tag": tag,
+            "sort": sort,
             "pagination": pagination,
         },
     )

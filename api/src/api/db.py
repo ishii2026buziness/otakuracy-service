@@ -55,7 +55,20 @@ WITH deduped AS (
 """
 
 # 後の日程（group_end が未来 or 最近）ほど上位
-_ORDER_SQL = "ORDER BY COALESCE(group_end, group_start) DESC NULLS LAST"
+_ORDER_NEAR = """
+ORDER BY
+    CASE
+        WHEN group_end IS NULL AND group_start IS NULL THEN 2
+        WHEN COALESCE(group_end, group_start) >= DATE('now') THEN 0
+        ELSE 1
+    END,
+    CASE WHEN COALESCE(group_end, group_start) >= DATE('now')
+         THEN COALESCE(group_end, group_start) END ASC,
+    COALESCE(group_end, group_start) DESC
+"""
+
+_ORDER_NEW = "ORDER BY COALESCE(group_end, group_start) DESC NULLS LAST"
+
 
 
 def search_events(
@@ -63,6 +76,7 @@ def search_events(
     tag: str = "",
     page: int = 1,
     limit: int = 24,
+    sort: str = "near",
 ) -> tuple[list[dict[str, Any]], int]:
     conn = get_conn()
     params: list[Any] = []
@@ -106,7 +120,7 @@ def search_events(
             area_code, official_url, primary_ticket_url, hero_image_url,
             price_min, price_max, status, is_online, venue_name
         FROM ({base_sql})
-        {_ORDER_SQL}
+        {_ORDER_NEAR if sort == 'near' else _ORDER_NEW}
         LIMIT ? OFFSET ?
     """
     rows = conn.execute(data_sql, params + [limit, offset]).fetchall()
