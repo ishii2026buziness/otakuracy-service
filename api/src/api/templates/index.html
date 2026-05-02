@@ -1,35 +1,34 @@
 {% extends "base.html" %}
-{% block title %}otakuracy — あなたのイベントフィード{% endblock %}
+{% block title %}otakuracy — イベントフィード{% endblock %}
 
 {% block content %}
 <div class="container" style="padding-top:1.5rem">
 
   <!-- 人気タグ -->
-  <div style="margin-bottom:2rem">
-    <div class="section-header" style="margin-bottom:0.75rem">
-      <h2 style="font-size:1rem;color:var(--text-muted)">人気タグ</h2>
-    </div>
+  <div style="margin-bottom:1.75rem">
+    <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.6rem">人気タグ</div>
     <div id="popular-tags" style="display:flex;flex-wrap:wrap;gap:0.4rem"></div>
   </div>
 
-  <!-- ブックマークセクション（JS描画） -->
-  <div id="bm-section" style="display:none;margin-bottom:2rem">
-    <div class="section-header" style="margin-bottom:1rem">
-      <h2 style="font-size:1.1rem">★ ブックマーク中</h2>
-      <a href="/mylist" style="font-size:0.85rem;color:var(--accent);text-decoration:none;margin-left:auto">すべて見る →</a>
+  <!-- タブ + フィード -->
+  <div>
+    <div class="tabs">
+      <button class="tab-btn" data-tab="all" onclick="switchTab('all')">すべて</button>
+      <button class="tab-btn" data-tab="following" onclick="switchTab('following')">フォロー中 <span id="ft-count" style="font-size:0.75rem;color:var(--text-muted)"></span></button>
     </div>
-    <div id="bm-mini-grid" class="cards-grid"></div>
-  </div>
 
-  <!-- フィード -->
-  <div id="feed-section">
-    <div class="section-header" style="margin-bottom:1rem">
-      <h2 style="font-size:1.1rem" id="feed-title">読み込み中...</h2>
-      <span class="count" id="feed-count" style="display:none"></span>
-      <a href="/events" id="feed-more" style="display:none;font-size:0.85rem;color:var(--accent);text-decoration:none;margin-left:auto">もっと見る →</a>
+    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.25rem;min-height:1.4rem">
+      <span id="feed-count" style="font-size:0.85rem;color:var(--text-muted);display:none"></span>
+      <a id="feed-more" href="/events" style="display:none;font-size:0.85rem;color:var(--accent);text-decoration:none;margin-left:auto">もっと見る →</a>
     </div>
+
     <div id="feed-grid" class="cards-grid"></div>
     <div id="feed-loading" style="text-align:center;padding:3rem 0;color:var(--text-muted)">読み込み中...</div>
+    <div id="feed-empty" style="display:none" class="empty-state">
+      <div class="icon">🔖</div>
+      <p>フォロー中のタグがありません。<br>イベント詳細のタグの ☆ でフォローできます。</p>
+      <a href="/events" style="display:inline-block;margin-top:1rem;color:var(--accent);font-size:0.9rem">イベントを探す →</a>
+    </div>
   </div>
 
 </div>
@@ -68,55 +67,73 @@ async function loadPopularTags() {
   const el = document.getElementById('popular-tags');
   if (!el) return;
   el.innerHTML = data.tags.map(t =>
-    `<a href="/events?tag=${encodeURIComponent(t.keyword)}" class="tag" ">${t.keyword}</a>`
+    `<a href="/events?tag=${encodeURIComponent(t.keyword)}" class="tag">${t.keyword}</a>`
   ).join('');
 }
 
-async function loadFeed() {
-  const tags = ftLoad();
+function updateFtCount() {
+  const n = ftLoad().length;
+  const el = document.getElementById('ft-count');
+  if (el) el.textContent = n > 0 ? `(${n})` : '';
+}
+
+async function loadFeed(tab) {
   const loading = document.getElementById('feed-loading');
-  const title   = document.getElementById('feed-title');
   const grid    = document.getElementById('feed-grid');
   const count   = document.getElementById('feed-count');
   const more    = document.getElementById('feed-more');
+  const empty   = document.getElementById('feed-empty');
 
-  const params = tags.length > 0
-    ? new URLSearchParams({ tags: tags.join(','), limit: 24, sort: 'near' })
-    : new URLSearchParams({ limit: 24, sort: 'near' });
+  grid.innerHTML = '';
+  loading.style.display = '';
+  empty.style.display = 'none';
+  count.style.display = 'none';
+  more.style.display = 'none';
 
-  title.textContent = tags.length > 0 ? 'フォロー中のイベント' : 'すべてのイベント';
-
-  const res = await fetch(`/api/events?${params}`);
-  const data = await res.json();
-  loading.style.display = 'none';
-
-  count.textContent = data.total + ' 件';
-  count.style.display = '';
-  more.style.display = '';
-  if (tags.length > 0) {
+  if (tab === 'following') {
+    const tags = ftLoad();
+    if (tags.length === 0) {
+      loading.style.display = 'none';
+      empty.style.display = '';
+      return;
+    }
+    const params = new URLSearchParams({ tags: tags.join(','), limit: 24, sort: 'near' });
+    const res = await fetch(`/api/events?${params}`);
+    const data = await res.json();
+    loading.style.display = 'none';
+    count.textContent = data.total + ' 件';
+    count.style.display = '';
     more.href = `/events?tags=${encodeURIComponent(tags.join(','))}`;
+    more.style.display = '';
+    grid.innerHTML = data.items.map(cardHtml).join('');
+  } else {
+    const params = new URLSearchParams({ limit: 24, sort: 'near' });
+    const res = await fetch(`/api/events?${params}`);
+    const data = await res.json();
+    loading.style.display = 'none';
+    count.textContent = data.total + ' 件';
+    count.style.display = '';
+    more.href = '/events';
+    more.style.display = '';
+    grid.innerHTML = data.items.map(cardHtml).join('');
   }
-  grid.innerHTML = data.items.map(cardHtml).join('');
 }
 
-async function loadBookmarks() {
-  const ids = bmLoad();
-  if (ids.length === 0) return;
-  const section = document.getElementById('bm-section');
-  const grid    = document.getElementById('bm-mini-grid');
-  const results = await Promise.all(
-    ids.slice(0, 4).map(id => fetch(`/api/events/${id}`).then(r => r.ok ? r.json() : null).catch(() => null))
-  );
-  const valid = results.filter(Boolean);
-  if (valid.length === 0) return;
-  section.style.display = 'block';
-  grid.innerHTML = valid.map(cardHtml).join('');
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
+  localStorage.setItem('otakuracy_home_tab', tab);
+  loadFeed(tab);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  updateFtCount();
   loadPopularTags();
-  loadBookmarks();
-  loadFeed();
+  // フォロー中タグがあれば「フォロー中」タブをデフォルトに
+  const saved = localStorage.getItem('otakuracy_home_tab');
+  const defaultTab = saved || (ftLoad().length > 0 ? 'following' : 'all');
+  switchTab(defaultTab);
 });
 </script>
 {% endblock %}

@@ -61,45 +61,30 @@
       align-items: center;
       gap: 0.25rem;
     }
-    .nav-search-mini {
-      margin-left: auto;
-      max-width: 320px;
-      width: 320px;
-    }
-    .nav-search-mini form {
-      display: flex;
-      gap: 0.5rem;
-    }
-    .nav-search-mini input {
-      flex: 1;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      color: var(--text);
-      padding: 0.4rem 0.75rem;
-      font-size: 0.9rem;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-    .nav-search-mini input:focus { border-color: var(--accent); }
-    .nav-search-mini button {
-      background: var(--accent);
-      border: none;
-      border-radius: var(--radius-sm);
-      color: #fff;
-      padding: 0.4rem 0.9rem;
-      cursor: pointer;
-      font-size: 0.85rem;
-      transition: opacity 0.15s;
-    }
-    .nav-search-mini button:hover { opacity: 0.85; }
     nav a.nav-link {
       color: var(--text-muted);
       text-decoration: none;
       font-size: 0.9rem;
-      transition: color 0.15s;
+      padding: 0.35rem 0.65rem;
+      border-radius: var(--radius-sm);
+      transition: color 0.15s, background 0.15s;
     }
-    nav a.nav-link:hover { color: var(--text); }
+    nav a.nav-link:hover { color: var(--text); background: var(--surface2); }
+    .nav-search-link {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.35rem 0.9rem;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .nav-search-link:hover { border-color: var(--accent); color: var(--text); }
 
     /* Layout */
     .container {
@@ -248,6 +233,28 @@
       color: var(--text-muted);
     }
 
+    /* Tabs */
+    .tabs {
+      display: flex;
+      border-bottom: 2px solid var(--border);
+      margin-bottom: 1.5rem;
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      padding: 0.65rem 1.25rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 0.95rem;
+      font-weight: 600;
+      font-family: inherit;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
     /* Pagination */
     .pagination {
       display: flex;
@@ -295,16 +302,6 @@
     }
 
     /* Follow tag chips */
-    .tag-chip {
-      display:inline-flex;align-items:center;gap:0.3rem;
-      background:var(--tag-bg);border:1px solid var(--border);border-radius:20px;
-      padding:0.2rem 0.6rem;font-size:0.8rem;color:var(--text);
-    }
-    .tag-chip button {
-      background:none;border:none;cursor:pointer;color:var(--text-muted);
-      font-size:0.9rem;padding:0;line-height:1;
-    }
-    .tag-chip button:hover { color:var(--text); }
     .follow-btn {
       font-size:0.8rem;padding:0.25rem 0.6rem;border-radius:6px;
       border:1px solid var(--border);background:var(--surface2);
@@ -315,8 +312,8 @@
 
     /* Responsive */
     @media (max-width: 600px) {
-      .nav-search-mini { display: none; }
       .cards-grid { grid-template-columns: 1fr; }
+      nav { gap: 0.75rem; }
     }
   </style>
   {% block head %}{% endblock %}
@@ -331,17 +328,8 @@
       ★ マイリスト <span id="nav-bm-count" style="display:none;background:var(--accent);color:#fff;border-radius:10px;padding:0 6px;font-size:0.75rem;margin-left:4px;"></span>
     </a>
   </div>
-  <div class="nav-search-mini">
-    <form action="/events" method="get">
-      <input type="text" name="q" placeholder="🔍 検索...">
-      <button type="submit">検索</button>
-    </form>
-  </div>
+  <a href="/events" class="nav-search-link">🔍 検索</a>
 </nav>
-<div id="tag-chip-bar" style="display:none;background:var(--surface);border-bottom:1px solid var(--border);padding:0.5rem 1.5rem;align-items:center;gap:0.5rem;flex-wrap:wrap;">
-  <span style="font-size:0.8rem;color:var(--text-muted);white-space:nowrap;">フォロー中:</span>
-  <div id="tag-chips" style="display:flex;gap:0.4rem;flex-wrap:wrap;"></div>
-</div>
 
 <main>
   {% block content %}{% endblock %}
@@ -378,49 +366,8 @@ function ftToggle(tag) {
   return tags.includes(tag);
 }
 
-function renderChipBar() {
-  const tags = ftLoad();
-  const bar = document.getElementById('tag-chip-bar');
-  const container = document.getElementById('tag-chips');
-  if (!bar || !container) return;
-  container.innerHTML = '';
-  if (tags.length === 0) { bar.style.display = 'none'; return; }
-  bar.style.display = 'flex';
-  tags.forEach(tag => {
-    const chip = document.createElement('span');
-    chip.className = 'tag-chip';
-    chip.innerHTML = `${tag} <button onclick="ftUnfollow('${tag.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">&#215;</button>`;
-    container.appendChild(chip);
-  });
-}
-
-function ftUnfollow(tag) {
-  ftToggle(tag);
-  renderChipBar();
-  if (location.pathname === '/events') applyFollowedFilter();
-}
-
-function applyFollowedFilter() {
-  const tags = ftLoad();
-  const params = new URLSearchParams(location.search);
-  if (params.get('q') || params.get('tag')) return;
-  if (tags.length === 0) {
-    if (params.get('tags')) { params.delete('tags'); location.search = params.toString(); }
-    return;
-  }
-  const current = params.get('tags') || '';
-  const desired = tags.join(',');
-  if (current !== desired) {
-    params.set('tags', desired);
-    params.set('page', '1');
-    location.search = params.toString();
-  }
-}
-
 document.addEventListener('DOMContentLoaded', () => {
   bmUpdateNav();
-  renderChipBar();
-  if (location.pathname === '/events') applyFollowedFilter();
 });
 </script>
 <script>

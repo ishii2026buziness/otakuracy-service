@@ -35,6 +35,18 @@
     </div>
   </div>
 
+
+  <!-- 検索フォーム -->
+  <form method="get" action="/events" style="display:flex;gap:0.5rem;margin-bottom:1.25rem">
+    <input type="text" name="q" value="{{ q }}" placeholder="🔍 タイトル・キーワードで検索..."
+      style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);padding:0.5rem 0.9rem;font-size:0.9rem;outline:none;transition:border-color 0.2s"
+      onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+    {% if tag %}<input type="hidden" name="tag" value="{{ tag }}">{% endif %}
+    <button type="submit"
+      style="background:var(--accent);border:none;border-radius:var(--radius-sm);color:#fff;padding:0.5rem 1.1rem;cursor:pointer;font-size:0.9rem;font-family:inherit">検索</button>
+    {% if q %}<a href="/events{% if tag %}?tag={{ tag }}{% endif %}" style="display:flex;align-items:center;padding:0 0.75rem;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-muted);text-decoration:none;font-size:0.85rem">✕</a>{% endif %}
+  </form>
+
   <!-- 人気タグ横スクロールバー -->
   <div id="popular-tags-bar" style="margin-bottom:1.25rem;display:flex;flex-wrap:wrap;align-items:center;gap:0.4rem">
     <span style="font-size:0.8rem;color:var(--text-muted);margin-right:0.5rem">人気タグ:</span>
