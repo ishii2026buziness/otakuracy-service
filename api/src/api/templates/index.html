@@ -1,8 +1,24 @@
 {% extends "base.html" %}
+{% block head %}
+<style>
+.bm-btn {
+  background: none; border: none; cursor: pointer; font-size: 1.1rem;
+  color: var(--text-muted); padding: 0; line-height: 1; flex-shrink: 0;
+  transition: color 0.15s;
+}
+.bm-btn:hover, .bm-btn.active { color: #f5c542; }
+</style>
+{% endblock %}
 {% block title %}otakuracy — イベントフィード{% endblock %}
 
 {% block content %}
 <div class="container" style="padding-top:1.5rem">
+
+  <!-- サービス説明 -->
+  <div style="background:linear-gradient(135deg,var(--surface),var(--surface2));border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem 1.5rem;margin-bottom:1.75rem">
+    <div style="font-size:1.1rem;font-weight:700;margin-bottom:0.3rem">アニメ・声優・ゲームのイベントをまとめてチェック</div>
+    <div style="font-size:0.85rem;color:var(--text-muted)">タグをフォローして、気になるイベントをすぐ見つけよう</div>
+  </div>
 
   <!-- 人気タグ -->
   <div style="margin-bottom:1.75rem">
@@ -48,13 +64,24 @@ function fmtPrice(min, max) {
   if (min === max || max == null) return min ? `¥${Number(min).toLocaleString()}` : '無料';
   return `¥${Number(min).toLocaleString()} 〜 ¥${Number(max).toLocaleString()}`;
 }
+function bmToggleBtn(btn) {
+  const id = btn.dataset.id;
+  const added = bmToggle(id);
+  btn.textContent = added ? '★' : '☆';
+  btn.classList.toggle('active', added);
+  bmUpdateNav();
+}
 function cardHtml(ev) {
+  const bookmarked = bmHas(ev.event_id);
   return `<a href="/events/${ev.event_id}" class="card">
     ${ev.hero_image_url
       ? `<img class="card-img" src="${ev.hero_image_url}" alt="${ev.title}" loading="lazy" onerror="this.style.display='none'">`
       : `<div class="card-img-placeholder">🎪</div>`}
     <div class="card-body">
-      <div class="card-title">${ev.title}</div>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.5rem">
+        <div class="card-title">${ev.title}</div>
+        <button class="bm-btn" data-id="${ev.event_id}" onclick="event.preventDefault();event.stopPropagation();bmToggleBtn(this)" title="マイリストに追加">${bookmarked ? '★' : '☆'}</button>
+      </div>
       <div class="card-meta">
         <div class="card-meta-row"><span>📅</span><span>${fmtDate(ev.start_at)}${ev.end_at && ev.end_at !== ev.start_at ? ' 〜 ' + fmtDate(ev.end_at) : ''}</span></div>
         ${ev.start_time ? `<div class="card-meta-row"><span>⏰</span><span>${ev.start_time} 〜${ev.end_time ? ' '+ev.end_time : ''}</span></div>` : ''}

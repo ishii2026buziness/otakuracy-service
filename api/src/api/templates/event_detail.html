@@ -114,29 +114,6 @@
     color: var(--accent2);
     text-align: center;
   }
-  .ip-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-  .ip-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 0.9rem;
-  }
-  .confidence-bar {
-    width: 60px;
-    height: 4px;
-    background: var(--border);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-  .confidence-fill {
-    height: 100%;
-    background: var(--accent);
-    border-radius: 2px;
-  }
   .breadcrumb {
     display: flex;
     align-items: center;
@@ -264,21 +241,6 @@
         </div>
       </div>
 
-      {% if event.ips %}
-      <div class="detail-section">
-        <h3>関連IP</h3>
-        <div class="ip-list">
-          {% for ip in event.ips %}
-          <div class="ip-item">
-            <span>{{ ip.display_name }}</span>
-            <div class="confidence-bar">
-              <div class="confidence-fill" style="width: {{ (ip.confidence * 100) | int }}%"></div>
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-      {% endif %}
     </div>
 
     {# Sidebar #}
@@ -300,6 +262,12 @@
       </div>
     </div>
   </div>
+
+  <!-- 関連イベント -->
+  <div id="related-section" style="display:none;margin-top:2.5rem">
+    <h3 style="font-size:0.8rem;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:1rem">同じタグのイベント</h3>
+    <div id="related-grid" class="cards-grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))"></div>
+  </div>
 </div>
 
 <div id="follow-toast" class="follow-toast">
@@ -315,6 +283,41 @@ function bmToggleBtn(btn) {
   btn.classList.toggle('active', added);
   bmUpdateNav();
 }
+function _fmtDateRel(v) {
+  if (!v) return '日時未定';
+  const d = v.split('T')[0], [y,m,dd] = d.split('-');
+  return `${y}年${parseInt(m)}月${parseInt(dd)}日`;
+}
+
+async function loadRelatedEvents() {
+  const keywords = {{ event.keywords | tojson }};
+  if (!keywords || keywords.length === 0) return;
+  const tag = keywords[0].keyword;
+  const currentId = '{{ event.event_id }}';
+  try {
+    const res = await fetch(`/api/events?tag=${encodeURIComponent(tag)}&limit=6&sort=near`);
+    const data = await res.json();
+    const others = data.items.filter(ev => ev.event_id !== currentId).slice(0, 4);
+    if (others.length === 0) return;
+    const grid = document.getElementById('related-grid');
+    const section = document.getElementById('related-section');
+    grid.innerHTML = others.map(ev => `<a href="/events/${ev.event_id}" class="card">
+      ${ev.hero_image_url
+        ? `<img class="card-img" src="${ev.hero_image_url}" alt="${ev.title}" loading="lazy" onerror="this.style.display='none'">`
+        : `<div class="card-img-placeholder">🎪</div>`}
+      <div class="card-body">
+        <div class="card-title">${ev.title}</div>
+        <div class="card-meta">
+          <div class="card-meta-row"><span>📅</span><span>${_fmtDateRel(ev.start_at)}</span></div>
+          ${ev.venue_name ? `<div class="card-meta-row"><span>📍</span><span>${ev.venue_name}</span></div>` : ''}
+          <div class="card-price">${ev.price_min != null ? '¥'+Number(ev.price_min).toLocaleString() : ev.price_max != null ? '¥'+Number(ev.price_max).toLocaleString() : '価格未定'}</div>
+        </div>
+      </div>
+    </a>`).join('');
+    section.style.display = '';
+  } catch(e) {}
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const btn = document.getElementById('bm-detail-btn');
   if (btn && bmHas(btn.dataset.id)) {
@@ -327,6 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.classList.add('following');
     }
   });
+  loadRelatedEvents();
 });
 function showFollowToast(tag, following) {
   const toast = document.getElementById('follow-toast');

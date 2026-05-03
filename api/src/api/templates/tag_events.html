@@ -1,4 +1,14 @@
 {% extends "base.html" %}
+{% block head %}
+<style>
+.bm-btn {
+  background: none; border: none; cursor: pointer; font-size: 1.1rem;
+  color: var(--text-muted); padding: 0; line-height: 1; flex-shrink: 0;
+  transition: color 0.15s;
+}
+.bm-btn:hover, .bm-btn.active { color: #f5c542; }
+</style>
+{% endblock %}
 {% block title %}#{{ tag }} のイベント — otakuracy{% endblock %}
 
 {% block content %}
@@ -31,10 +41,13 @@
       <div class="card-body">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.5rem">
           <div class="card-title">{{ ev.title }}</div>
-          {% if ev.status == 'announced' %}<span class="badge badge-announced">予定</span>
-          {% elif ev.status == 'ongoing' %}<span class="badge badge-ongoing">開催中</span>
-          {% elif ev.status == 'ended' %}<span class="badge badge-ended">終了</span>
-          {% endif %}
+          <div style="display:flex;align-items:center;gap:0.4rem;flex-shrink:0">
+            {% if ev.status == 'announced' %}<span class="badge badge-announced">予定</span>
+            {% elif ev.status == 'ongoing' %}<span class="badge badge-ongoing">開催中</span>
+            {% elif ev.status == 'ended' %}<span class="badge badge-ended">終了</span>
+            {% endif %}
+            <button class="bm-btn" data-id="{{ ev.event_id }}" onclick="event.preventDefault();event.stopPropagation();bmToggleBtn(this)" title="マイリストに追加">☆</button>
+          </div>
         </div>
         <div class="card-meta">
           <div class="card-meta-row">
@@ -91,19 +104,32 @@
   {% endif %}
 </div>
 <script>
+function bmToggleBtn(btn) {
+  const id = btn.dataset.id;
+  const added = bmToggle(id);
+  btn.textContent = added ? '★' : '☆';
+  btn.classList.toggle('active', added);
+  bmUpdateNav();
+}
 document.addEventListener('DOMContentLoaded', () => {
   const btn = document.getElementById('tag-follow-btn');
   if (btn && ftHas(btn.dataset.tag)) {
     btn.textContent = 'フォロー中 ✓';
     btn.classList.add('following');
   }
+  const ids = bmLoad();
+  document.querySelectorAll('.bm-btn').forEach(b => {
+    if (ids.includes(b.dataset.id)) {
+      b.textContent = '★';
+      b.classList.add('active');
+    }
+  });
 });
 function toggleTagPageFollow(btn) {
   const tag = btn.dataset.tag;
   const following = ftToggle(tag);
   btn.textContent = following ? 'フォロー中 ✓' : '+ フォロー';
   btn.classList.toggle('following', following);
-  renderChipBar();
 }
 </script>
 {% endblock %}

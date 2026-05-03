@@ -87,6 +87,8 @@ def populate(db_path: Path, force_refresh: bool = False, dry_run: bool = False) 
         if not raw_title:
             continue
         synonyms = [s for s in e.get("synonyms", []) if s]
+        if not any(_is_ja(s) for s in [raw_title] + synonyms):
+            continue
         display_name, aliases = _ja_title(raw_title, synonyms)
         domain_tags = _domain_tags(e.get("type", ""))
         ip_id = repo.upsert(

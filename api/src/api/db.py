@@ -79,6 +79,8 @@ def search_events(
     page: int = 1,
     limit: int = 24,
     sort: str = "near",
+    date_from: str = "",
+    date_to: str = "",
 ) -> tuple[list[dict[str, Any]], int]:
     conn = get_conn()
     params: list[Any] = []
@@ -112,6 +114,13 @@ def search_events(
             )"""
         )
         params += tags
+
+    if date_from:
+        filter_clauses.append("COALESCE(d.group_end, d.group_start) >= ?")
+        params.append(date_from)
+    if date_to:
+        filter_clauses.append("d.group_start <= ?")
+        params.append(date_to)
 
     where_sql = "WHERE " + " AND ".join(filter_clauses)
 

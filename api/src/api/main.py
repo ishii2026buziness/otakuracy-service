@@ -77,9 +77,11 @@ async def api_events(
     page: int = Query(1, ge=1),
     limit: int = Query(24, ge=1, le=100),
     sort: str = Query("near"),
+    date_from: str = Query(""),
+    date_to: str = Query(""),
 ):
     tags_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
-    items, total = db.search_events(q=q, tag=tag, tags=tags_list, page=page, limit=limit, sort=sort)
+    items, total = db.search_events(q=q, tag=tag, tags=tags_list, page=page, limit=limit, sort=sort, date_from=date_from, date_to=date_to)
     return {
         "items": items,
         "total": total,
@@ -125,10 +127,12 @@ async def events_list(
     tags: str = Query(""),
     page: int = Query(1, ge=1),
     sort: str = Query("near"),
+    date_from: str = Query(""),
+    date_to: str = Query(""),
 ):
     limit = 24
     tags_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
-    items, total = db.search_events(q=q, tag=tag, tags=tags_list, page=page, limit=limit, sort=sort)
+    items, total = db.search_events(q=q, tag=tag, tags=tags_list, page=page, limit=limit, sort=sort, date_from=date_from, date_to=date_to)
     pagination = _pagination(page, total, limit)
     return templates.TemplateResponse(
         request, "events.html",
@@ -138,6 +142,8 @@ async def events_list(
             "tag": tag,
             "tags": tags,
             "sort": sort,
+            "date_from": date_from,
+            "date_to": date_to,
             "pagination": pagination,
         },
     )
