@@ -7,6 +7,10 @@
   transition: color 0.15s;
 }
 .bm-btn:hover, .bm-btn.active { color: #f5c542; }
+.manager-label {
+  font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 0.5rem;
+}
 </style>
 {% endblock %}
 {% block title %}otakuracy — イベントフィード{% endblock %}
@@ -33,6 +37,18 @@
       <button class="tab-btn" data-tab="following" onclick="switchTab('following')">フォロー中 <span id="ft-count" style="font-size:0.75rem;color:var(--text-muted)"></span></button>
     </div>
 
+    <!-- フォロー中タブ: タグ管理パネル（常時表示） -->
+    <div id="following-manager" style="display:none;margin-bottom:1.5rem;padding:1rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)">
+      <div style="margin-bottom:1rem">
+        <div class="manager-label">フォロー中のタグ</div>
+        <div id="followed-chips" style="display:flex;flex-wrap:wrap;gap:0.4rem;min-height:1.8rem;align-items:center"></div>
+      </div>
+      <div>
+        <div class="manager-label">タグを追加</div>
+        <div id="explore-tags" style="display:flex;flex-wrap:wrap;gap:0.4rem"></div>
+      </div>
+    </div>
+
     <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.25rem;min-height:1.4rem">
       <span id="feed-count" style="font-size:0.85rem;color:var(--text-muted);display:none"></span>
       <a id="feed-more" href="/events" style="display:none;font-size:0.85rem;color:var(--accent);text-decoration:none;margin-left:auto">もっと見る →</a>
@@ -41,13 +57,9 @@
     <div id="feed-grid" class="cards-grid"></div>
     <div id="feed-loading" style="text-align:center;padding:3rem 0;color:var(--text-muted)">読み込み中...</div>
 
-    <!-- フォロー中タブ: タグ未設定時の空状態 -->
-    <div id="feed-empty" style="display:none;padding:2rem 0">
-      <p style="color:var(--text-muted);font-size:0.95rem;margin-bottom:1.25rem">
-        タグをフォローすると、関連するイベントがここに表示されます。<br>
-        ☆ を押してタグをフォローしてみましょう：
-      </p>
-      <div id="empty-popular-tags" style="display:flex;flex-wrap:wrap;gap:0.5rem"></div>
+    <!-- 空状態（フォロー中タブ・タグなし） -->
+    <div id="feed-empty" style="display:none;padding:1.5rem 0;text-align:center">
+      <p style="font-size:0.9rem;color:var(--text-dim)">上のリストからタグをフォローすると、関連イベントが表示されます</p>
     </div>
   </div>
 
@@ -99,7 +111,6 @@ async function loadPopularTags() {
   const data = await res.json();
   popularTagsCache = data.tags;
 
-  // ナビ下の人気タグ欄
   const el = document.getElementById('popular-tags');
   if (el) {
     el.innerHTML = data.tags.map(t =>
@@ -108,29 +119,52 @@ async function loadPopularTags() {
   }
 }
 
-function renderEmptyStateTags() {
-  const container = document.getElementById('empty-popular-tags');
-  if (!container) return;
-  container.innerHTML = popularTagsCache.map(t => {
+function renderFollowedChips() {
+  const el = document.getElementById('followed-chips');
+  if (!el) return;
+  const tags = ftLoad();
+  if (tags.length === 0) {
+    el.innerHTML = '<span style="font-size:0.82rem;color:var(--text-dim)">（まだフォローしていません）</span>';
+  } else {
+    el.innerHTML = tags.map(tag =>
+      `<span style="display:inline-flex;align-items:center;background:var(--accent);border-radius:20px;overflow:hidden">
+        <a href="/tags/${encodeURIComponent(tag)}" style="padding:0.25rem 0.3rem 0.25rem 0.75rem;font-size:0.8rem;color:#fff;text-decoration:none;white-space:nowrap">${tag}</a>
+        <button onclick="unfollowTag('${tag.replace(/'/g, "\\'")}')"
+          style="padding:0.25rem 0.6rem 0.25rem 0.15rem;background:none;border:none;cursor:pointer;font-size:0.8rem;color:rgba(255,255,255,0.8);line-height:1;transition:opacity 0.15s"
+          title="フォロー解除">×</button>
+      </span>`
+    ).join('');
+  }
+}
+
+function renderExploreTags() {
+  const el = document.getElementById('explore-tags');
+  if (!el) return;
+  el.innerHTML = popularTagsCache.map(t => {
     const following = ftHas(t.keyword);
     return `<span style="display:inline-flex;align-items:center;gap:0;background:var(--tag-bg);border:1px solid var(--border);border-radius:20px;overflow:hidden">
-      <span style="padding:0.25rem 0.4rem 0.25rem 0.75rem;font-size:0.8rem;color:var(--text-muted)">${t.keyword}</span>
-      <button onclick="emptyTagFollow(this,'${t.keyword.replace(/'/g, "\\'")}')"
+      <span style="padding:0.25rem 0.4rem 0.25rem 0.75rem;font-size:0.8rem;color:var(--text-muted);white-space:nowrap">${t.keyword}</span>
+      <button onclick="toggleExploreTag(this,'${t.keyword.replace(/'/g, "\\'")}')"
         style="padding:0.25rem 0.65rem 0.25rem 0.2rem;background:none;border:none;cursor:pointer;font-size:0.85rem;transition:color 0.15s;color:${following ? '#f5c542' : 'var(--text-dim)'}"
         title="${following ? 'フォロー解除' : 'フォロー'}">${following ? '★' : '☆'}</button>
     </span>`;
   }).join('');
 }
 
-function emptyTagFollow(btn, tag) {
-  const following = ftToggle(tag);
-  btn.textContent = following ? '★' : '☆';
-  btn.style.color = following ? '#f5c542' : 'var(--text-dim)';
+function toggleExploreTag(btn, tag) {
+  ftToggle(tag);
   updateFtCount();
-  if (following) {
-    // タグをフォローしたのでフィードをリロード
-    loadFeed('following');
-  }
+  renderFollowedChips();
+  renderExploreTags();
+  loadFeed('following');
+}
+
+function unfollowTag(tag) {
+  ftToggle(tag);
+  updateFtCount();
+  renderFollowedChips();
+  renderExploreTags();
+  loadFeed('following');
 }
 
 function updateFtCount() {
@@ -156,7 +190,6 @@ async function loadFeed(tab) {
     const tags = ftLoad();
     if (tags.length === 0) {
       loading.style.display = 'none';
-      renderEmptyStateTags();
       empty.style.display = '';
       return;
     }
@@ -187,6 +220,12 @@ function switchTab(tab) {
     b.classList.toggle('active', b.dataset.tab === tab);
   });
   localStorage.setItem('otakuracy_home_tab', tab);
+  const manager = document.getElementById('following-manager');
+  if (manager) manager.style.display = tab === 'following' ? '' : 'none';
+  if (tab === 'following') {
+    renderFollowedChips();
+    renderExploreTags();
+  }
   loadFeed(tab);
 }
 
