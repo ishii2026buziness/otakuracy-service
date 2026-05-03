@@ -153,7 +153,7 @@ def search_events(
             area_code, official_url, primary_ticket_url, hero_image_url,
             price_min, price_max, status, is_online, venue_name,
             (SELECT esr.raw_venue_text FROM event_source_record esr
-             WHERE esr.event_id = event_id
+             WHERE esr.raw_title = title
                AND esr.raw_venue_text IS NOT NULL AND esr.raw_venue_text != ''
              LIMIT 1) AS raw_venue_text
         FROM ({base_sql})
@@ -220,8 +220,8 @@ def get_event(event_id: str) -> dict | None:
 
     if not result.get("venue_name"):
         esr_row = conn.execute(
-            "SELECT raw_venue_text FROM event_source_record WHERE event_id = ? AND raw_venue_text IS NOT NULL AND raw_venue_text != '' LIMIT 1",
-            (event_id,),
+            "SELECT raw_venue_text FROM event_source_record WHERE raw_title = ? AND raw_venue_text IS NOT NULL AND raw_venue_text != '' LIMIT 1",
+            (result["title"],),
         ).fetchone()
         if esr_row:
             result["venue_name"] = _clean_venue_text(esr_row[0])
