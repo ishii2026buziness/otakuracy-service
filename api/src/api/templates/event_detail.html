@@ -190,7 +190,9 @@
           {% if event.venue_name %}
           <div class="detail-info-row">
             <span class="detail-info-label">📍 会場</span>
-            <span class="detail-info-value">{{ event.venue_name }}{% if event.area_code %} ({{ event.area_code }}){% endif %}</span>
+            <span class="detail-info-value">
+              <a href="https://www.google.com/maps/search/?api=1&query={{ event.venue_name | urlencode }}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-underline-offset:2px">{{ event.venue_name }}</a>
+            </span>
           </div>
           {% elif event.is_online %}
           <div class="detail-info-row">

@@ -1,9 +1,18 @@
 """Read-only SQLite access for otakuracy API."""
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any
 
 DB_PATH = Path("/data/otakuracy.db")
+
+
+def _clean_venue_text(text: str | None) -> str | None:
+    if not text:
+        return None
+    text = text.replace('\xa0', ' ').strip()
+    text = re.sub(r'\s*\(\s*\)\s*$', '', text).strip()
+    return text or None
 
 
 def get_conn() -> sqlite3.Connection:
@@ -142,14 +151,23 @@ def search_events(
             group_end   AS end_at,
             start_time, end_time,
             area_code, official_url, primary_ticket_url, hero_image_url,
-            price_min, price_max, status, is_online, venue_name
+            price_min, price_max, status, is_online, venue_name,
+            (SELECT esr.raw_venue_text FROM event_source_record esr
+             WHERE esr.event_id = event_id
+               AND esr.raw_venue_text IS NOT NULL AND esr.raw_venue_text != ''
+             LIMIT 1) AS raw_venue_text
         FROM ({base_sql})
         {_ORDER_NEAR if sort == 'near' else _ORDER_NEW}
         LIMIT ? OFFSET ?
     """
     rows = conn.execute(data_sql, params + [limit, offset]).fetchall()
     conn.close()
-    return rows_to_dicts(rows), total
+    result = rows_to_dicts(rows)
+    for row in result:
+        if not row.get("venue_name"):
+            row["venue_name"] = _clean_venue_text(row.get("raw_venue_text"))
+        row.pop("raw_venue_text", None)
+    return result, total
 
 
 def get_event(event_id: str) -> dict | None:
@@ -199,6 +217,14 @@ def get_event(event_id: str) -> dict | None:
         (event_id, event_id),
     ).fetchall()
     result["keywords"] = [dict(r) for r in kw_rows]
+
+    if not result.get("venue_name"):
+        esr_row = conn.execute(
+            "SELECT raw_venue_text FROM event_source_record WHERE event_id = ? AND raw_venue_text IS NOT NULL AND raw_venue_text != '' LIMIT 1",
+            (event_id,),
+        ).fetchone()
+        if esr_row:
+            result["venue_name"] = _clean_venue_text(esr_row[0])
 
     ip_rows = conn.execute(
         """
