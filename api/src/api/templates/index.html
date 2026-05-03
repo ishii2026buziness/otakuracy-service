@@ -145,8 +145,8 @@ function renderExploreTags() {
     return `<span style="display:inline-flex;align-items:center;gap:0;background:var(--tag-bg);border:1px solid var(--border);border-radius:20px;overflow:hidden">
       <span style="padding:0.25rem 0.4rem 0.25rem 0.75rem;font-size:0.8rem;color:var(--text-muted);white-space:nowrap">${t.keyword}</span>
       <button onclick="toggleExploreTag(this,'${t.keyword.replace(/'/g, "\\'")}')"
-        style="padding:0.25rem 0.65rem 0.25rem 0.2rem;background:none;border:none;cursor:pointer;font-size:0.85rem;transition:color 0.15s;color:${following ? '#f5c542' : 'var(--text-dim)'}"
-        title="${following ? 'フォロー解除' : 'フォロー'}">${following ? '★' : '☆'}</button>
+        style="padding:0.25rem 0.65rem 0.25rem 0.2rem;background:none;border:none;cursor:pointer;font-size:0.75rem;font-weight:700;transition:color 0.15s;color:${following ? 'var(--accent)' : 'var(--text-muted)'}"
+        title="${following ? 'フォロー解除' : 'フォロー'}">${following ? '✓' : '＋'}</button>
     </span>`;
   }).join('');
 }

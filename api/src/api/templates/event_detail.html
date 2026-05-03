@@ -19,11 +19,11 @@
 .tag-follow-chip__star {
   padding:0.2rem 0.55rem 0.2rem 0.2rem;
   background:none; border:none; cursor:pointer;
-  font-size:0.8rem; color:var(--text-dim);
-  transition:color 0.15s; line-height:1;
+  font-size:0.75rem; color:var(--text-dim);
+  transition:color 0.15s; line-height:1; font-weight:700;
 }
 .tag-follow-chip__star:hover { color:var(--text-muted); }
-.tag-follow-chip__star.following { color:#f5c542; }
+.tag-follow-chip__star.following { color:var(--accent); }
 
   .detail-hero {
     width: 100%;
@@ -232,7 +232,7 @@
           <span class="tag-follow-chip">
             <a href="/tags/{{ kw.keyword | urlencode }}" class="tag-follow-chip__name">{{ kw.keyword }}</a>
             <button class="tag-follow-chip__star" data-tag="{{ kw.keyword }}"
-              onclick="toggleFollowBtn(this)" title="フォロー">☆</button>
+              onclick="toggleFollowBtn(this)" title="フォロー">＋</button>
           </span>
           {% endfor %}
           {% else %}
@@ -326,7 +326,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   document.querySelectorAll('.tag-follow-chip__star[data-tag]').forEach(btn => {
     if (ftHas(btn.dataset.tag)) {
-      btn.textContent = '★';
+      btn.textContent = '✓';
       btn.classList.add('following');
     }
   });
@@ -344,7 +344,7 @@ function showFollowToast(tag, following) {
 function toggleFollowBtn(btn) {
   const tag = btn.dataset.tag;
   const following = ftToggle(tag);
-  btn.textContent = following ? '★' : '☆';
+  btn.textContent = following ? '✓' : '＋';
   btn.classList.toggle('following', following);
   showFollowToast(tag, following);
 }
