@@ -117,7 +117,7 @@ def normalize_keywords(db_path: str, dry_run: bool = False) -> dict:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--db", default="/srv/otakuracy/data/otakuracy.db")
+    parser.add_argument("--db", default="/data/otakuracy.db")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     normalize_keywords(args.db, dry_run=args.dry_run)
