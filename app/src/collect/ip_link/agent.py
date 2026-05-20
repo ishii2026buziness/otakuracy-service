@@ -114,7 +114,7 @@ def run_agent(
             ip_name = item.get("ip_name")
             _NG_EXACT = {"null", "none", "なし", "不明", "unknown"}
             _NG_START = ("不明 -", "unknown -", "web検索", "わからない")
-            _is_garbage = (
+            _is_garbage = bool(ip_name) and (
                 ip_name.lower().strip() in _NG_EXACT
                 or any(ip_name.lower().startswith(p) for p in _NG_START)
             )
