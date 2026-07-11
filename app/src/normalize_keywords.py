@@ -14,6 +14,8 @@ from urllib.request import Request, urlopen
 GATEWAY_URL = os.getenv("CLAUDE_GATEWAY_URL", "http://127.0.0.1:18080")
 GATEWAY_CALLER = "otakuracy"
 MODEL = "claude-haiku-4-5-20251001"
+# 全キーワード一括だと生成がtimeout=120sを超える（1500件で常態化）ためバッチ分割する
+BATCH_SIZE = int(os.getenv("NORMALIZE_BATCH_SIZE", "300"))
 
 _PROMPT = """\
 以下はアニメ・マンガ・ゲーム・VTuber・アイドル等のイベントのツイートから抽出したキーワード一覧です。
@@ -87,7 +89,17 @@ def normalize_keywords(db_path: str, dry_run: bool = False) -> dict:
     ]
     print(f"[normalize] {len(keywords)} unique keywords → Claude Gateway", flush=True)
 
-    groups = _call_gateway(keywords)
+    groups = []
+    for i in range(0, len(keywords), BATCH_SIZE):
+        batch = keywords[i:i + BATCH_SIZE]
+        batch_groups = _call_gateway(batch)
+        groups.extend(batch_groups)
+        print(
+            f"[normalize] batch {i // BATCH_SIZE + 1}/"
+            f"{(len(keywords) + BATCH_SIZE - 1) // BATCH_SIZE}: "
+            f"{len(batch)} keywords → {len(batch_groups)} groups",
+            flush=True,
+        )
     print(f"[normalize] {len(groups)} normalization groups found", flush=True)
 
     inserted = 0
